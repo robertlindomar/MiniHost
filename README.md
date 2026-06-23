@@ -1,8 +1,8 @@
 # MiniHost
 
-MiniHost é um painel web simples para organizar domínios, subdomínios e registros DNS da sua VPS.
+MiniHost é um painel web para organizar domínios, registros DNS, projetos e bancos PostgreSQL da sua VPS.
 
-O objetivo futuro do projeto é evoluir para uma plataforma de gestão e automação usando PostgreSQL, Cloudflare, Coolify e deploys em VPS.
+Hoje o painel integra com PostgreSQL (metadados e provisionamento real) e Cloudflare (sincronização e CRUD de DNS). O objetivo futuro é evoluir para deploy automatizado com Coolify.
 
 ## Etapa 11.5 implementada
 
@@ -14,7 +14,9 @@ O objetivo futuro do projeto é evoluir para uma plataforma de gestão e automa�
 - Proteções contra destruição de `postgres`, `minihost`, bancos `template*` e usuário admin.
 - Status `DESTROYED` e `PARTIALLY_DESTROYED` com histórico preservado no MiniHost.
 - Filtro na listagem: Padrão (sem destruídos), Ativos, Desativados, Arquivados, Destruídos, Todos.
-- AuditLog: `PROJECT_DATABASE_DISABLE_ACCESS`, `PROJECT_DATABASE_ENABLE_ACCESS`, `PROJECT_DATABASE_DESTROY_*`.
+- Campos de auditoria: `disabledAt`, `disabledBy`, `destroyedAt`, `destroyedBy`, `lastDestructionError`.
+- Rotas: `POST .../disable-access`, `POST .../enable-access`, `POST .../destroy`.
+- AuditLog: `PROJECT_DATABASE_DISABLE_ACCESS`, `PROJECT_DATABASE_ENABLE_ACCESS`, `PROJECT_DATABASE_DESTROY_START`, `PROJECT_DATABASE_DESTROY_SUCCESS`, `PROJECT_DATABASE_DESTROY_PARTIAL`, `PROJECT_DATABASE_DESTROY_FAILED`.
 
 **Diferenças importantes:**
 
@@ -26,6 +28,19 @@ O objetivo futuro do projeto é evoluir para uma plataforma de gestão e automa�
 
 **Aviso:** destruir é **irreversível** no PostgreSQL. O registro permanece no MiniHost para auditoria. `DROP DATABASE` não roda dentro de transação Prisma — cada comando usa conexão administrativa separada via `pg`.
 
+### Zona de perigo — como usar
+
+1. Abra os detalhes do banco na seção **Bancos PostgreSQL** do projeto.
+2. Role até **Zona de perigo** (visível para bancos que ainda não foram destruídos ou arquivados de forma definitiva).
+3. Escolha a ação:
+   - **Arquivar** — apenas no MiniHost; o PostgreSQL permanece intacto.
+   - **Desativar acesso** — revoga `CONNECT`, encerra sessões ativas; disponível para bancos `ACTIVE` ou `CREATED_MANUALLY`.
+   - **Reativar acesso** — restaura `CONNECT`; disponível apenas para bancos `DISABLED`.
+   - **Destruir banco e usuário** — `DROP DATABASE` + `DROP ROLE`; digite exatamente `destruir nome_db` (ex.: `destruir systagio_db`).
+4. Use o filtro da listagem para ver **Desativados**, **Arquivados**, **Destruídos** ou **Todos**. O padrão oculta bancos destruídos.
+
+Se apenas parte da destruição for concluída (por exemplo, banco removido mas usuário não), o status fica `PARTIALLY_DESTROYED` e o erro em `lastDestructionError`.
+
 ## Etapa 11 implementada
 
 - Model `PostgresAdminCredential` no Prisma com credencial administrativa criptografada.
@@ -33,11 +48,13 @@ O objetivo futuro do projeto é evoluir para uma plataforma de gestão e automa�
 - Seção **Credencial administrativa PostgreSQL** em Configurações (host, porta, database de manutenção, usuário, senha, SSL).
 - Teste de conexão admin via `POST /api/settings/postgres/test`.
 - Serviço `lib/server/postgres-provisioner.ts` com criação real de usuário e banco via biblioteca `pg`.
+- Isolamento por projeto: `REVOKE CONNECT ON DATABASE ... FROM PUBLIC` e `GRANT CONNECT` apenas ao usuário do banco.
 - Botão **Criar banco real** na tela do banco planejado, com modal de confirmação forte (`criar banco nome_db`).
-- Rota `POST /api/projects/databases/provision` para provisionamento protegido.
+- **Verificar permissões** e **Corrigir permissões** para bancos `ACTIVE` ou `CREATED_MANUALLY` (confirmação: `corrigir permissoes nome_db`).
+- Rotas: `POST /api/projects/databases/provision`, `POST .../verify-permissions`, `POST .../fix-permissions`.
 - Validação de identificadores PostgreSQL antes de montar SQL.
 - Senhas nunca expostas no frontend após salvar e nunca registradas no AuditLog.
-- Histórico: `POSTGRES_ADMIN_CREDENTIAL_SAVED`, `POSTGRES_ADMIN_CREDENTIAL_REMOVED`, `POSTGRES_ADMIN_TEST_SUCCESS`, `POSTGRES_ADMIN_TEST_FAILED`, `PROJECT_DATABASE_PROVISION_START`, `PROJECT_DATABASE_PROVISION_SUCCESS`, `PROJECT_DATABASE_PROVISION_FAILED`.
+- Histórico: `POSTGRES_ADMIN_CREDENTIAL_SAVED`, `POSTGRES_ADMIN_CREDENTIAL_REMOVED`, `POSTGRES_ADMIN_TEST_SUCCESS`, `POSTGRES_ADMIN_TEST_FAILED`, `PROJECT_DATABASE_PROVISION_START`, `PROJECT_DATABASE_PROVISION_SUCCESS`, `PROJECT_DATABASE_PROVISION_FAILED`, `PROJECT_DATABASE_PERMISSIONS_VERIFIED`, `PROJECT_DATABASE_PERMISSIONS_FIXED`.
 - Dashboard atualizado com bancos com erro e projetos sem banco ativo.
 - Mantidos geradores de `.env` e SQL manual.
 
@@ -75,7 +92,7 @@ Ou use um superusuário dedicado apenas em ambientes confiáveis.
 - Nunca commite arquivos `.env` com senhas ou `DATABASE_URL`.
 - O AuditLog nunca registra senhas nem URLs completas com credenciais.
 
-**Próxima etapa sugerida:** integrar o banco criado ao fluxo completo do projeto e, depois, conectar com Coolify para deploy automatizado.
+**Próxima etapa sugerida (concluída na 11.5):** desprovisionamento seguro (arquivar, desativar acesso, destruir). Depois: integrar com Coolify para deploy automatizado.
 
 ## Etapa 10 implementada
 
@@ -274,8 +291,6 @@ Registro local/manual na edição:
 - O MiniHost mostra o aviso: "Este registro não está vinculado à Cloudflare. A edição será apenas local."
 - A rota usada é `PATCH /api/records/{id}`.
 
-Nesta etapa, o MiniHost **não exclui** DNS real na Cloudflare. A exclusão pelo painel remove apenas o registro do PostgreSQL.
-
 ## Excluir registro DNS real
 
 Para excluir um registro vinculado à Cloudflare:
@@ -371,7 +386,7 @@ Na listagem de projetos, clique em `Arquivar`. O projeto muda para status `ARCHI
 
 ## Bancos PostgreSQL por projeto
 
-Esta etapa planeja bancos por projeto sem criar o banco real automaticamente.
+Fluxo completo: planejar → provisionar (opcional) → gerar `.env`/SQL → gerenciar permissões → zona de perigo.
 
 ### Configurar PostgreSQL padrão
 
@@ -402,6 +417,24 @@ Esta etapa planeja bancos por projeto sem criar o banco real automaticamente.
 3. Copie o SQL com `CREATE USER`, `CREATE DATABASE` e `GRANT`.
 4. **Revise antes de executar em produção** no pgAdmin ou terminal.
 
+### Criar banco real (Etapa 11)
+
+1. Configure e teste a **Credencial administrativa PostgreSQL** em Configurações.
+2. Abra os detalhes do banco planejado e clique em **Criar banco real**.
+3. Digite a confirmação exata (ex.: `criar banco systagio_db`).
+4. Após sucesso, o status muda para **Ativo**. Em caso de falha, fica **Erro** com `lastProvisionError`.
+
+### Verificar e corrigir permissões
+
+Para bancos ativos ou criados manualmente:
+
+1. Clique em **Verificar permissões** para checar `CONNECT` do usuário e alertas de `PUBLIC`.
+2. Se necessário, clique em **Corrigir permissões** e confirme com `corrigir permissoes nome_db`.
+
+### Zona de perigo (Etapa 11.5)
+
+Na tela de detalhes do banco, use **Arquivar**, **Desativar acesso**, **Reativar acesso** ou **Destruir banco e usuário**. Veja a seção **Etapa 11.5 implementada** para diferenças entre cada ação.
+
 ## Build
 
 ```bash
@@ -418,10 +451,10 @@ Os testes E2E usam Playwright e cobrem login, logout, proteção de rotas, naveg
 
 ## Próximas etapas sugeridas
 
-1. Criação real de banco PostgreSQL via conexão administrativa segura.
-2. Melhorar comparação antes/depois da sincronização.
-3. Integrar com Coolify futuramente.
+1. Integrar com Coolify para deploy automatizado a partir dos projetos.
+2. Melhorar comparação antes/depois da sincronização DNS.
+3. Backup e restauração de bancos PostgreSQL por projeto.
 
 ## Observação
 
-A exclusão real na Cloudflare já está disponível com confirmação forte. Projetos organizam DNS e bancos planejados, mas a criação real do PostgreSQL ainda não é automática.
+O MiniHost já provisiona e desprovisiona bancos PostgreSQL reais (com confirmação forte), sincroniza e edita DNS na Cloudflare, e mantém histórico/auditoria no PostgreSQL. Coolify e deploy automatizado ainda não estão integrados.
