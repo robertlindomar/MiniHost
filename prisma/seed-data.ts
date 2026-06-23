@@ -2,8 +2,24 @@ import type { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 export async function seedInitialData(prisma: PrismaClient) {
-  const passwordHash = await bcrypt.hash("123456", 12);
+  const defaultAdminPasswordHash = await bcrypt.hash("admin123", 12);
   const admin = await prisma.user.upsert({
+    where: { email: "admin@minihost.local" },
+    update: {
+      name: "Administrador MiniHost",
+      passwordHash: defaultAdminPasswordHash,
+      role: "ADMIN"
+    },
+    create: {
+      name: "Administrador MiniHost",
+      email: "admin@minihost.local",
+      passwordHash: defaultAdminPasswordHash,
+      role: "ADMIN"
+    }
+  });
+
+  const personalAdminPasswordHash = await bcrypt.hash("123456", 12);
+  await prisma.user.upsert({
     where: { email: "robertlindomar18@gmail.com" },
     update: {
       name: "Robert Lindomar",
@@ -12,7 +28,7 @@ export async function seedInitialData(prisma: PrismaClient) {
     create: {
       name: "Robert Lindomar",
       email: "robertlindomar18@gmail.com",
-      passwordHash,
+      passwordHash: personalAdminPasswordHash,
       role: "ADMIN"
     }
   });
@@ -36,7 +52,7 @@ export async function seedInitialData(prisma: PrismaClient) {
     {
       type: "A",
       name: "@",
-      content: "72.60.250.39",
+      content: "147.15.126.225",
       ttl: null,
       proxied: true,
       status: "active",
@@ -46,7 +62,7 @@ export async function seedInitialData(prisma: PrismaClient) {
     {
       type: "A",
       name: "painel",
-      content: "72.60.250.39",
+      content: "147.15.126.225",
       ttl: null,
       proxied: true,
       status: "active",
@@ -104,7 +120,7 @@ export async function seedInitialData(prisma: PrismaClient) {
       { key: "cloudflareApiToken", value: "" },
       { key: "defaultZoneId", value: "fake-zone-robertlindomar" },
       { key: "defaultDomain", value: "robertlindomar.dev" },
-      { key: "defaultVpsIp", value: "72.60.250.39" },
+      { key: "defaultVpsIp", value: "147.15.126.225" },
       { key: "defaultProxyEnabled", value: "true" }
     ],
     skipDuplicates: true

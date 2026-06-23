@@ -27,6 +27,9 @@ export interface DnsRecord {
   updatedAt: string;
   comment?: string;
   priority?: number;
+  cloudflareRecordId?: string;
+  source: "manual" | "cloudflare";
+  lastSyncedAt?: string;
 }
 
 export interface HistoryItem {

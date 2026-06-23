@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Cloud, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { DnsRecordForm } from "@/components/forms/DnsRecordForm";
@@ -11,13 +11,14 @@ import { Modal } from "@/components/ui/Modal";
 import { Notice } from "@/components/ui/Notice";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { apiRequest } from "@/lib/api-client";
-import { formatDate, formatRecordValue, formatTtl } from "@/lib/format";
+import { formatDate, formatDateTime, formatRecordValue, formatTtl } from "@/lib/format";
 import type { DnsRecord, DnsRecordFormInput, Domain } from "@/lib/types";
 import { isSensitiveRecord } from "@/lib/validation";
 
 type NoticeState = { type: "success" | "error" | "info"; message: string } | null;
 type DomainsResponse = { domains: Domain[] };
 type RecordsResponse = { records: DnsRecord[] };
+type CloudflareSyncResponse = { imported: number; updated: number; total: number; records: DnsRecord[] };
 
 export function RecordsPage() {
   const searchParams = useSearchParams();
@@ -30,6 +31,7 @@ export function RecordsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
 
   async function reload() {
@@ -69,6 +71,14 @@ export function RecordsPage() {
     return records.filter((record) => record.domainId === domainFilter);
   }, [domainFilter, records]);
 
+  const syncDomain = useMemo(() => {
+    if (domainFilter !== "all") {
+      return domains.find((domain) => domain.id === domainFilter);
+    }
+
+    return domains.length === 1 ? domains[0] : undefined;
+  }, [domainFilter, domains]);
+
   function openCreateModal() {
     if (domains.length === 0) {
       setNotice({ type: "error", message: "Cadastre um domínio antes de criar registros DNS." });
@@ -87,6 +97,41 @@ export function RecordsPage() {
   function closeModal() {
     setIsModalOpen(false);
     setEditingRecord(undefined);
+  }
+
+  async function handleCloudflareSync() {
+    if (!syncDomain) {
+      setNotice({ type: "error", message: "Selecione um domínio para sincronizar com Cloudflare." });
+      return;
+    }
+
+    if (!syncDomain.zoneId) {
+      setNotice({ type: "error", message: "Para sincronizar com Cloudflare, configure o Zone ID deste domínio." });
+      return;
+    }
+
+    try {
+      setIsSyncing(true);
+      const result = await apiRequest<CloudflareSyncResponse>("/api/cloudflare/sync-zone", {
+        method: "POST",
+        body: JSON.stringify({ domainId: syncDomain.id })
+      });
+      setNotice({
+        type: "success",
+        message: `Sincronização concluída: ${result.imported} registros importados e ${result.updated} atualizados.`
+      });
+      await reload();
+    } catch (requestError) {
+      setNotice({
+        type: "error",
+        message:
+          requestError instanceof Error
+            ? requestError.message
+            : "Não foi possível sincronizar com a Cloudflare. Verifique o token e o Zone ID."
+      });
+    } finally {
+      setIsSyncing(false);
+    }
   }
 
   async function handleSubmit(input: DnsRecordFormInput) {
@@ -169,6 +214,18 @@ export function RecordsPage() {
       cell: (record) => <Badge variant={record.proxied ? "success" : "muted"}>{record.proxied ? "Sim" : "Não"}</Badge>
     },
     {
+      header: "Origem",
+      cell: (record) => (
+        <Badge variant={record.source === "cloudflare" ? "info" : "muted"}>
+          {record.source === "cloudflare" ? "Cloudflare" : "Manual"}
+        </Badge>
+      )
+    },
+    {
+      header: "Última sincronização",
+      cell: (record) => (record.lastSyncedAt ? formatDateTime(record.lastSyncedAt) : "-")
+    },
+    {
       header: "Status",
       cell: (record) => <StatusBadge status={record.status} />
     },
@@ -224,6 +281,15 @@ export function RecordsPage() {
           </select>
           <button
             type="button"
+            onClick={handleCloudflareSync}
+            disabled={isLoading || isSyncing || !syncDomain}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isSyncing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
+            {isSyncing ? "Sincronizando..." : "Sincronizar com Cloudflare"}
+          </button>
+          <button
+            type="button"
             onClick={openCreateModal}
             disabled={isLoading}
             className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-70"
@@ -235,6 +301,9 @@ export function RecordsPage() {
       </div>
 
       {notice ? <Notice type={notice.type} message={notice.message} /> : null}
+      {syncDomain && !syncDomain.zoneId ? (
+        <Notice type="info" message="Para sincronizar com Cloudflare, configure o Zone ID deste domínio." />
+      ) : null}
       {isLoading ? <Notice type="info" message="Carregando registros DNS..." /> : null}
 
       <DataTable

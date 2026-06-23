@@ -11,7 +11,7 @@ import {
   UserRound
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api-client";
@@ -40,7 +40,6 @@ function getPageTitle(pathname: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const title = getPageTitle(pathname);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -56,6 +55,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         setUser(data.user);
       } catch {
         setUser(null);
+        await apiRequest<{ ok: boolean }>("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+        window.location.assign(`/login?next=${encodeURIComponent(pathname)}`);
       }
     }
 
@@ -69,8 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         method: "POST"
       });
     } finally {
-      router.replace("/login");
-      router.refresh();
+      window.location.assign("/login");
     }
   }
 

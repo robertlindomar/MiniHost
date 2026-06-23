@@ -131,7 +131,13 @@ export function DomainsPage() {
       cell: (domain) => (
         <div>
           <p className="font-medium text-zinc-950">{domain.name}</p>
-          {domain.zoneId ? <p className="mt-1 text-xs text-zinc-500">{domain.zoneId}</p> : null}
+          {domain.zoneId ? (
+            <p className="mt-1 text-xs text-zinc-500">{domain.zoneId}</p>
+          ) : (
+            <p className="mt-1 text-xs font-medium text-amber-700">
+              Para sincronizar com Cloudflare, configure o Zone ID deste domínio.
+            </p>
+          )}
         </div>
       )
     },

@@ -46,7 +46,10 @@ export function toDnsRecord(record: PrismaDnsRecord): DnsRecord {
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     comment: record.comment ?? undefined,
-    priority: record.priority ?? undefined
+    priority: record.priority ?? undefined,
+    cloudflareRecordId: record.cloudflareRecordId ?? undefined,
+    source: record.source === "cloudflare" ? "cloudflare" : "manual",
+    lastSyncedAt: record.lastSyncedAt?.toISOString()
   };
 }
 

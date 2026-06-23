@@ -142,6 +142,11 @@ test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
     await expect(page.getByRole("row").filter({ hasText: "A" }).filter({ hasText: "@" })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "CNAME" }).filter({ hasText: "www" })).toBeVisible();
 
+    await page.getByRole("button", { name: "Sincronizar com Cloudflare" }).click();
+    await expect(
+      page.getByText(/Não foi possível sincronizar|Token da Cloudflare|Zone ID inválido|Permissão insuficiente/)
+    ).toBeVisible();
+
     await page.getByRole("button", { name: "Novo registro DNS" }).click();
     await page.getByLabel("Tipo do registro").selectOption("A");
     await page.getByLabel("Nome/subdomínio").fill(recordName);

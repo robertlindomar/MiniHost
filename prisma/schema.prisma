@@ -39,21 +39,25 @@ model Domain {
 }
 
 model DnsRecord {
-  id        String   @id @default(cuid())
-  domainId  String
-  type      String
-  name      String
-  content   String
-  ttl       Int?
-  proxied   Boolean  @default(false)
-  status    String   @default("active")
-  comment   String?
-  priority  Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  domain    Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  id                 String    @id @default(cuid())
+  domainId           String
+  type               String
+  name               String
+  content            String
+  ttl                Int?
+  proxied            Boolean   @default(false)
+  status             String    @default("active")
+  comment            String?
+  priority           Int?
+  cloudflareRecordId String?   @unique
+  source             String    @default("manual")
+  lastSyncedAt       DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  domain             Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
 
   @@index([domainId])
+  @@index([source])
   @@map("dns_records")
 }
 
