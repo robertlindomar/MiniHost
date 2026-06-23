@@ -4,7 +4,7 @@ import type {
   DnsRecord as PrismaDnsRecord,
   Domain as PrismaDomain
 } from "@prisma/client";
-import type { DnsRecord, Domain, HistoryItem, MiniHostSettings } from "@/lib/types";
+import type { DnsRecord, DnsRecordStatus, Domain, HistoryItem, MiniHostSettings } from "@/lib/types";
 
 type AuditLogWithUser = AuditLog & {
   user?: {
@@ -33,6 +33,14 @@ export function toDomain(domain: PrismaDomain): Domain {
   };
 }
 
+export function toDnsRecordStatus(status: string): DnsRecordStatus {
+  if (status === "DELETED") {
+    return "DELETED";
+  }
+
+  return status === "inactive" ? "inactive" : "active";
+}
+
 export function toDnsRecord(record: PrismaDnsRecord): DnsRecord {
   return {
     id: record.id,
@@ -42,14 +50,17 @@ export function toDnsRecord(record: PrismaDnsRecord): DnsRecord {
     value: record.content,
     ttl: record.ttl ?? "auto",
     proxied: record.proxied,
-    status: record.status === "inactive" ? "inactive" : "active",
+    status: toDnsRecordStatus(record.status),
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     comment: record.comment ?? undefined,
     priority: record.priority ?? undefined,
     cloudflareRecordId: record.cloudflareRecordId ?? undefined,
     source: record.source === "cloudflare" ? "cloudflare" : "manual",
-    lastSyncedAt: record.lastSyncedAt?.toISOString()
+    lastSyncedAt: record.lastSyncedAt?.toISOString(),
+    deletedAt: record.deletedAt?.toISOString(),
+    deletedBy: record.deletedBy ?? undefined,
+    deletionReason: record.deletionReason ?? undefined
   };
 }
 

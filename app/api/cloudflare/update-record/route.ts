@@ -1,7 +1,7 @@
 import { CloudflareApiError, listDnsRecords, updateDnsRecord } from "@/lib/cloudflare";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/server/audit";
-import { findDnsRecordConflict, toCloudflareRecordName, toComparableRecordName } from "@/lib/server/dns-records";
+import { findDnsRecordConflict, isRecordDeleted, toCloudflareRecordName, toComparableRecordName } from "@/lib/server/dns-records";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toDnsRecord } from "@/lib/server/mappers";
@@ -77,6 +77,10 @@ export async function PATCH(request: Request) {
       return fail("Registro DNS não encontrado.", 404);
     }
 
+    if (isRecordDeleted(existing.status)) {
+      return fail("Este registro já está marcado como excluído.");
+    }
+
     if (!existing.cloudflareRecordId) {
       return fail("Este registro não está vinculado à Cloudflare. Use a edição local.");
     }
@@ -123,7 +127,7 @@ export async function PATCH(request: Request) {
     }
 
     const localRecords = await prisma.dnsRecord.findMany({
-      where: { domainId: domain.id },
+      where: { domainId: domain.id, status: { not: "DELETED" } },
       select: {
         id: true,
         type: true,

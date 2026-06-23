@@ -1,11 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
-import { validateLocalDnsRecordUniqueness } from "@/lib/server/dns-records";
+import { validateLocalDnsRecordUniqueness, isRecordDeleted } from "@/lib/server/dns-records";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toDnsRecord } from "@/lib/server/mappers";
 import { validateDnsRecordBody } from "@/lib/server/validation";
+import { buildDeleteConfirmationText } from "@/lib/validation";
 import type { DnsRecordFormInput, DnsRecordType } from "@/lib/types";
+
+type DeleteLocalRecordBody = {
+  confirmationText?: string;
+  reason?: string;
+};
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -41,6 +47,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 
       if (!current) {
         throw new Error("Registro DNS não encontrado.");
+      }
+
+      if (isRecordDeleted(current.status)) {
+        throw new Error("Este registro já está marcado como excluído.");
       }
 
       if (body.type !== current.type) {
@@ -99,6 +109,8 @@ export async function DELETE(request: Request, context: RouteContext) {
   try {
     const user = await requireCurrentUser(request);
     const { id } = await context.params;
+    const body = await readBody<DeleteLocalRecordBody>(request);
+    const reason = body.reason?.trim() || undefined;
 
     const record = await prisma.$transaction(async (tx) => {
       const current = await tx.dnsRecord.findUnique({
@@ -110,22 +122,63 @@ export async function DELETE(request: Request, context: RouteContext) {
         throw new Error("Registro DNS não encontrado.");
       }
 
-      await tx.dnsRecord.delete({ where: { id } });
+      if (isRecordDeleted(current.status)) {
+        throw new Error("Este registro já está marcado como excluído.");
+      }
+
+      if (current.cloudflareRecordId) {
+        throw new Error("Este registro está vinculado à Cloudflare. Use a exclusão real.");
+      }
+
+      const expectedConfirmation = buildDeleteConfirmationText(current.name, current.domain.name);
+      const confirmationText = body.confirmationText?.trim() ?? "";
+
+      if (confirmationText.trim().toLowerCase() !== expectedConfirmation) {
+        throw new Error("Texto de confirmação inválido.");
+      }
+
+      const deletedAt = new Date();
+      const updated = await tx.dnsRecord.update({
+        where: { id },
+        data: {
+          status: "DELETED",
+          deletedAt,
+          deletedBy: user.id,
+          deletionReason: reason ?? null
+        }
+      });
 
       await writeAudit(tx, {
-        action: "Registro excluído",
+        action: "DNS_RECORD_DELETE_LOCAL",
         entityType: "record",
         entityId: current.id,
         entityName: `${current.type} ${current.name}`,
         userId: user.id,
-        description: `Registro ${current.type} ${current.name} excluído de ${current.domain.name}.`,
-        oldData: toDnsRecord(current)
+        description: `Registro ${current.type} ${current.name} marcado como excluído em ${current.domain.name}.`,
+        oldData: {
+          domain: current.domain.name,
+          type: current.type,
+          name: current.name,
+          content: current.content,
+          proxied: current.proxied,
+          status: current.status,
+          reason: reason ?? null
+        },
+        newData: {
+          status: "DELETED",
+          deletedAt: deletedAt.toISOString(),
+          deletedBy: user.id,
+          reason: reason ?? null
+        }
       });
 
-      return current;
+      return updated;
     });
 
-    return ok({ record: toDnsRecord(record) });
+    return ok({
+      message: "Registro marcado como excluído localmente.",
+      record: toDnsRecord(record)
+    });
   } catch (error) {
     return handleRouteError(error);
   }

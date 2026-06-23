@@ -101,6 +101,10 @@ export async function POST(request: Request) {
           }));
 
         if (existing) {
+          if (existing.status === "DELETED") {
+            continue;
+          }
+
           await tx.dnsRecord.update({
             where: { id: existing.id },
             data

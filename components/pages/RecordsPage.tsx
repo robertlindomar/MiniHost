@@ -4,8 +4,8 @@ import { Cloud, Pencil, Plus, RefreshCw, Trash2, AlertTriangle } from "lucide-re
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { DnsRecordForm } from "@/components/forms/DnsRecordForm";
+import { DeleteRecordModal } from "@/components/forms/DeleteRecordModal";
 import { Badge } from "@/components/ui/Badge";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DataTable, type TableColumn } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { Notice } from "@/components/ui/Notice";
@@ -22,6 +22,9 @@ type CloudflareSyncResponse = { imported: number; updated: number; total: number
 type CloudflareCreateRecordResponse = { message: string; record: DnsRecord };
 type CloudflareUpdateRecordResponse = { message: string; record: DnsRecord };
 type LocalUpdateRecordResponse = { message: string; record: DnsRecord };
+type DeleteRecordResponse = { message: string; record: DnsRecord };
+
+type RecordVisibilityFilter = "active" | "deleted" | "all";
 
 type PendingCloudflareUpdate = {
   record: DnsRecord;
@@ -42,6 +45,7 @@ export function RecordsPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [records, setRecords] = useState<DnsRecord[]>([]);
   const [domainFilter, setDomainFilter] = useState(domainFromUrl ?? "all");
+  const [visibilityFilter, setVisibilityFilter] = useState<RecordVisibilityFilter>("active");
   const [editingRecord, setEditingRecord] = useState<DnsRecord | undefined>();
   const [recordToDelete, setRecordToDelete] = useState<DnsRecord | undefined>();
   const [pendingCloudflareUpdate, setPendingCloudflareUpdate] = useState<PendingCloudflareUpdate | undefined>();
@@ -51,12 +55,12 @@ export function RecordsPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
 
-  async function reload() {
+  async function reload(visibility: RecordVisibilityFilter = visibilityFilter) {
     try {
       setIsLoading(true);
       const [domainData, recordData] = await Promise.all([
         apiRequest<DomainsResponse>("/api/domains"),
-        apiRequest<RecordsResponse>("/api/records")
+        apiRequest<RecordsResponse>(`/api/records?visibility=${visibility}`)
       ]);
       setDomains(domainData.domains);
       setRecords(recordData.records);
@@ -71,8 +75,8 @@ export function RecordsPage() {
   }
 
   useEffect(() => {
-    void reload();
-  }, []);
+    void reload(visibilityFilter);
+  }, [visibilityFilter]);
 
   useEffect(() => {
     setDomainFilter(domainFromUrl ?? "all");
@@ -107,6 +111,11 @@ export function RecordsPage() {
   }
 
   function openEditModal(record: DnsRecord) {
+    if (record.status === "DELETED") {
+      setNotice({ type: "error", message: "Registros excluídos não podem ser editados." });
+      return;
+    }
+
     setEditingRecord(record);
     setIsModalOpen(true);
   }
@@ -241,17 +250,35 @@ export function RecordsPage() {
     }
   }
 
-  async function confirmDelete() {
+  async function confirmDelete(input: { confirmationText: string; reason: string }) {
     if (!recordToDelete) {
       return;
     }
 
     try {
       setIsSubmitting(true);
-      await apiRequest<{ record: DnsRecord }>(`/api/records/${recordToDelete.id}`, {
-        method: "DELETE"
-      });
-      setNotice({ type: "success", message: "Registro DNS excluído com sucesso." });
+
+      if (recordToDelete.cloudflareRecordId) {
+        const result = await apiRequest<DeleteRecordResponse>("/api/cloudflare/delete-record", {
+          method: "DELETE",
+          body: JSON.stringify({
+            recordId: recordToDelete.id,
+            confirmationText: input.confirmationText,
+            reason: input.reason || undefined
+          })
+        });
+        setNotice({ type: "success", message: result.message || "Registro excluído da Cloudflare com sucesso." });
+      } else {
+        const result = await apiRequest<DeleteRecordResponse>(`/api/records/${recordToDelete.id}`, {
+          method: "DELETE",
+          body: JSON.stringify({
+            confirmationText: input.confirmationText,
+            reason: input.reason || undefined
+          })
+        });
+        setNotice({ type: "success", message: result.message || "Registro marcado como excluído localmente." });
+      }
+
       setRecordToDelete(undefined);
       await reload();
     } catch (requestError) {
@@ -317,26 +344,29 @@ export function RecordsPage() {
     {
       header: "Ações",
       className: "min-w-44",
-      cell: (record) => (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => openEditModal(record)}
-            className="inline-flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            Editar
-          </button>
-          <button
-            type="button"
-            onClick={() => setRecordToDelete(record)}
-            className="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Excluir
-          </button>
-        </div>
-      )
+      cell: (record) =>
+        record.status === "DELETED" ? (
+          <span className="text-xs text-zinc-400">-</span>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => openEditModal(record)}
+              className="inline-flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Editar
+            </button>
+            <button
+              type="button"
+              onClick={() => setRecordToDelete(record)}
+              className="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Excluir
+            </button>
+          </div>
+        )
     }
   ];
 
@@ -348,6 +378,15 @@ export function RecordsPage() {
           <p className="mt-1 text-sm text-zinc-500">Controle persistido no PostgreSQL para registros A, AAAA, CNAME, TXT e MX.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
+          <select
+            value={visibilityFilter}
+            onChange={(event) => setVisibilityFilter(event.target.value as RecordVisibilityFilter)}
+            className="rounded-md border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+          >
+            <option value="active">Ativos</option>
+            <option value="deleted">Excluídos</option>
+            <option value="all">Todos</option>
+          </select>
           <select
             value={domainFilter}
             onChange={(event) => setDomainFilter(event.target.value)}
@@ -405,16 +444,11 @@ export function RecordsPage() {
         />
       </Modal>
 
-      <ConfirmDialog
+      <DeleteRecordModal
         isOpen={Boolean(recordToDelete)}
-        title="Excluir registro DNS"
-        message={`Deseja excluir ${recordToDelete ? `${recordToDelete.type} ${recordToDelete.name}` : "este registro"} do banco?`}
-        warning={
-          recordToDelete && isSensitiveRecord(recordToDelete)
-            ? "Este registro parece sensível para funcionamento do domínio. Revise com atenção antes de excluir."
-            : undefined
-        }
-        isConfirming={isSubmitting}
+        record={recordToDelete}
+        domainName={recordToDelete ? domainById.get(recordToDelete.domainId) : undefined}
+        isSubmitting={isSubmitting}
         onCancel={() => setRecordToDelete(undefined)}
         onConfirm={confirmDelete}
       />

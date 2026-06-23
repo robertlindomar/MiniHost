@@ -52,12 +52,16 @@ model DnsRecord {
   cloudflareRecordId String?   @unique
   source             String    @default("manual")
   lastSyncedAt       DateTime?
+  deletedAt          DateTime?
+  deletedBy          String?
+  deletionReason     String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   domain             Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
 
   @@index([domainId])
   @@index([source])
+  @@index([status])
   @@map("dns_records")
 }
 

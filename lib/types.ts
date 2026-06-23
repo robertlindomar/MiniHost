@@ -1,5 +1,7 @@
 export type EntityStatus = "active" | "inactive";
 
+export type DnsRecordStatus = EntityStatus | "DELETED";
+
 export type DnsRecordType = "A" | "AAAA" | "CNAME" | "TXT" | "MX";
 
 export type TtlValue = "auto" | number;
@@ -22,7 +24,7 @@ export interface DnsRecord {
   value: string;
   ttl: TtlValue;
   proxied: boolean;
-  status: EntityStatus;
+  status: DnsRecordStatus;
   createdAt: string;
   updatedAt: string;
   comment?: string;
@@ -30,6 +32,9 @@ export interface DnsRecord {
   cloudflareRecordId?: string;
   source: "manual" | "cloudflare";
   lastSyncedAt?: string;
+  deletedAt?: string;
+  deletedBy?: string;
+  deletionReason?: string;
 }
 
 export interface HistoryItem {

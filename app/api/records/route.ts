@@ -26,9 +26,20 @@ export async function GET(request: Request) {
     await requireCurrentUser(request);
     const url = new URL(request.url);
     const domainId = url.searchParams.get("domainId");
+    const visibility = url.searchParams.get("visibility") ?? "active";
+
+    const statusFilter =
+      visibility === "deleted"
+        ? { status: "DELETED" as const }
+        : visibility === "all"
+          ? {}
+          : { status: { not: "DELETED" as const } };
 
     const records = await prisma.dnsRecord.findMany({
-      where: domainId ? { domainId } : undefined,
+      where: {
+        ...(domainId ? { domainId } : {}),
+        ...statusFilter
+      },
       orderBy: { updatedAt: "desc" }
     });
 

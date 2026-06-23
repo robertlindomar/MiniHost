@@ -193,3 +193,37 @@ export async function updateDnsRecord(zoneId: string, recordId: string, payload:
 
   return responsePayload.result;
 }
+
+interface CloudflareDeleteResponse {
+  success: boolean;
+  errors: Array<{ code: number; message: string }>;
+  result?: { id: string };
+}
+
+export async function deleteDnsRecord(zoneId: string, recordId: string) {
+  const token = getApiToken();
+  const url = new URL(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${recordId}`);
+
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      cache: "no-store"
+    });
+  } catch {
+    throw new CloudflareApiError("Não foi possível conectar à Cloudflare.");
+  }
+
+  const responsePayload = (await response.json().catch(() => null)) as CloudflareDeleteResponse | null;
+
+  if (!response.ok || !responsePayload?.success) {
+    throw new CloudflareApiError(getErrorMessage(response.status, responsePayload ?? undefined), response.status);
+  }
+
+  return true;
+}

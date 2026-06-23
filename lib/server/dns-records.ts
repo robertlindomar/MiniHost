@@ -95,7 +95,10 @@ export async function validateLocalDnsRecordUniqueness(
   excludeId?: string
 ) {
   const records = await tx.dnsRecord.findMany({
-    where: { domainId },
+    where: {
+      domainId,
+      status: { not: "DELETED" }
+    },
     select: {
       id: true,
       type: true,
@@ -107,4 +110,8 @@ export async function validateLocalDnsRecordUniqueness(
   if (conflict) {
     throw new Error(conflict);
   }
+}
+
+export function isRecordDeleted(status: string) {
+  return status === "DELETED";
 }

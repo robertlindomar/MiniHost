@@ -168,21 +168,22 @@ test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
 
     const editedRecordRow = page.getByRole("row").filter({ hasText: editedRecordName });
     await editedRecordRow.getByRole("button", { name: "Excluir" }).click();
-    await expect(page.getByRole("dialog")).toContainText(`Deseja excluir A ${editedRecordName}`);
-    await page.getByRole("button", { name: "Excluir" }).last().click();
+    await expect(page.getByRole("dialog")).toContainText("não está vinculado à Cloudflare");
+    await page.getByPlaceholder("api-e2e.robertlindomar.dev").fill("api-e2e.robertlindomar.dev");
+    await page.getByRole("button", { name: "Marcar como excluído" }).click();
 
-    await expect(page.getByText("Registro DNS excluído com sucesso.")).toBeVisible();
+    await expect(page.getByText("Registro marcado como excluído localmente.")).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: editedRecordName })).toHaveCount(0);
 
     const sensitiveRow = page.getByRole("row").filter({ hasText: "CNAME" }).filter({ hasText: "www" });
     await sensitiveRow.getByRole("button", { name: "Excluir" }).click();
-    await expect(page.getByRole("dialog")).toContainText("Este registro parece sensível");
+    await expect(page.getByRole("dialog")).toContainText("Cuidado: este registro pode afetar");
     await page.getByRole("button", { name: "Cancelar" }).click();
 
     await page.getByRole("link", { name: "Histórico" }).click();
     await expect(page.getByRole("row").filter({ hasText: "DNS_RECORD_CREATE_LOCAL" }).filter({ hasText: recordName })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "DNS_RECORD_UPDATE_LOCAL" }).filter({ hasText: editedRecordName })).toBeVisible();
-    await expect(page.getByRole("row").filter({ hasText: "Registro excluído" }).filter({ hasText: editedRecordName })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "DNS_RECORD_DELETE_LOCAL" }).filter({ hasText: editedRecordName })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "DNS_RECORD_CREATE_LOCAL" }).filter({ hasText: "admin@minihost.local" })).toBeVisible();
   });
 

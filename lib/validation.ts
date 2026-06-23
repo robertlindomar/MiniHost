@@ -117,7 +117,41 @@ export function validateRecordInput(input: DnsRecordFormInput) {
   return errors;
 }
 
-export function isSensitiveRecord(record: Pick<DnsRecord, "name" | "type">) {
-  const sensitiveNames = ["", "@", "www", "mail"];
-  return sensitiveNames.includes(record.name.toLowerCase()) || record.type === "MX" || record.type === "TXT";
+export function isSensitiveRecord(record: Pick<DnsRecord, "name" | "type"> & { value?: string }) {
+  const normalizedName = record.name.trim().toLowerCase();
+  const sensitiveNames = ["", "@", "www", "mail", "_dmarc", "_domainkey"];
+  const normalizedValue = (record.value ?? "").trim().toLowerCase();
+
+  if (sensitiveNames.includes(normalizedName)) {
+    return true;
+  }
+
+  if (record.type === "MX" || record.type === "TXT") {
+    return true;
+  }
+
+  if (normalizedName.includes("spf") || normalizedName.includes("dkim") || normalizedName.includes("dmarc")) {
+    return true;
+  }
+
+  if (normalizedValue.includes("v=spf1") || normalizedValue.includes("v=dmarc1") || normalizedValue.includes("dkim")) {
+    return true;
+  }
+
+  return false;
+}
+
+export function buildDeleteConfirmationText(recordName: string, domainName: string) {
+  const normalizedName = recordName.trim().toLowerCase();
+  const normalizedDomain = domainName.trim().toLowerCase();
+
+  if (normalizedName === "@" || normalizedName === "" || normalizedName === normalizedDomain) {
+    return normalizedDomain;
+  }
+
+  if (normalizedName.endsWith(`.${normalizedDomain}`)) {
+    return normalizedName;
+  }
+
+  return `${normalizedName}.${normalizedDomain}`;
 }

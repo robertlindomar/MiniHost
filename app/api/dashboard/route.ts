@@ -8,7 +8,10 @@ export async function GET(request: Request) {
     await requireCurrentUser(request);
     const [domains, records, history] = await Promise.all([
       prisma.domain.findMany({ orderBy: { createdAt: "desc" } }),
-      prisma.dnsRecord.findMany({ orderBy: { updatedAt: "desc" } }),
+      prisma.dnsRecord.findMany({
+        where: { status: { not: "DELETED" } },
+        orderBy: { updatedAt: "desc" }
+      }),
       prisma.auditLog.findMany({ include: { user: true }, orderBy: { createdAt: "desc" }, take: 20 })
     ]);
 

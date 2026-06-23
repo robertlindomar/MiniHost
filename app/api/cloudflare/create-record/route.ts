@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     }
 
     const localRecords = await prisma.dnsRecord.findMany({
-      where: { domainId: domain.id },
+      where: { domainId: domain.id, status: { not: "DELETED" } },
       select: {
         id: true,
         type: true,
