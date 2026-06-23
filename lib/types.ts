@@ -1,6 +1,6 @@
 export type EntityStatus = "active" | "inactive";
 
-export type DnsRecordType = "A" | "CNAME" | "TXT" | "MX";
+export type DnsRecordType = "A" | "AAAA" | "CNAME" | "TXT" | "MX";
 
 export type TtlValue = "auto" | number;
 
@@ -68,4 +68,5 @@ export interface DnsRecordFormInput {
   status: EntityStatus;
   comment?: string;
   priority?: number;
+  createInCloudflare?: boolean;
 }

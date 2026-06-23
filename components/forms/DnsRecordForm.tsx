@@ -1,10 +1,10 @@
 "use client";
 
-import { Save, X } from "lucide-react";
+import { AlertTriangle, Cloud, Save, X } from "lucide-react";
 import { useState } from "react";
 import { fieldClass } from "@/components/forms/styles";
 import type { DnsRecord, DnsRecordFormInput, DnsRecordType, Domain, EntityStatus, TtlValue } from "@/lib/types";
-import { validateRecordInput } from "@/lib/validation";
+import { isSensitiveRecord, validateRecordInput } from "@/lib/validation";
 import { Notice } from "@/components/ui/Notice";
 
 interface DnsRecordFormProps {
@@ -31,16 +31,26 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
     proxied: initialData?.proxied ?? true,
     status: initialData?.status ?? "active",
     comment: initialData?.comment ?? "",
-    priority: typeof initialData?.priority === "number" ? String(initialData.priority) : "10"
+    priority: typeof initialData?.priority === "number" ? String(initialData.priority) : "10",
+    createInCloudflare: false
   });
   const [errors, setErrors] = useState<string[]>([]);
 
   function updateField(key: keyof typeof form, value: string | boolean) {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+
+      if (key === "type" && (value === "TXT" || value === "MX")) {
+        next.proxied = false;
+      }
+
+      return next;
+    });
   }
 
   function buildInput(): DnsRecordFormInput {
     const ttl = form.ttlMode === "auto" ? "auto" : Number(form.ttlValue);
+    const proxied = form.type === "TXT" || form.type === "MX" ? false : form.proxied;
 
     return {
       domainId: form.domainId,
@@ -48,10 +58,11 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
       name: form.name.trim(),
       value: form.value.trim(),
       ttl,
-      proxied: form.proxied,
+      proxied,
       status: form.status as EntityStatus,
       comment: form.comment.trim() || undefined,
-      priority: form.type === "MX" ? Number(form.priority) : undefined
+      priority: form.type === "MX" ? Number(form.priority) : undefined,
+      createInCloudflare: !initialData && form.createInCloudflare
     };
   }
 
@@ -75,6 +86,10 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
       onSubmit(input);
     }
   }
+
+  const isProxiedDisabled = form.type === "TXT" || form.type === "MX";
+  const isCloudflareSensitive =
+    form.createInCloudflare && isSensitiveRecord({ type: form.type as DnsRecordType, name: form.name.trim() });
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -110,6 +125,7 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
             className={fieldClass}
           >
             <option value="A">A</option>
+            <option value="AAAA">AAAA</option>
             <option value="CNAME">CNAME</option>
             <option value="TXT">TXT</option>
             <option value="MX">MX</option>
@@ -157,7 +173,15 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
           value={form.value}
           onChange={(event) => updateField("value", event.target.value)}
           className={fieldClass}
-          placeholder={form.type === "A" ? "72.60.250.39" : form.type === "CNAME" ? "robertlindomar.dev" : "Conteúdo do registro"}
+          placeholder={
+            form.type === "A"
+              ? "72.60.250.39"
+              : form.type === "AAAA"
+                ? "2001:db8::1"
+                : form.type === "CNAME"
+                  ? "robertlindomar.dev"
+                  : "Conteúdo do registro"
+          }
         />
       </div>
 
@@ -199,7 +223,8 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
           Proxy ativo
           <input
             type="checkbox"
-            checked={form.proxied}
+            checked={!isProxiedDisabled && form.proxied}
+            disabled={isProxiedDisabled}
             onChange={(event) => updateField("proxied", event.target.checked)}
             className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
           />
@@ -220,6 +245,37 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
           </select>
         </div>
       </div>
+
+      {isProxiedDisabled ? <Notice type="info" message="Registros TXT e MX são criados sem proxy Cloudflare." /> : null}
+
+      {!initialData ? (
+        <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-4">
+          <label className="flex items-center justify-between gap-4 text-sm font-semibold text-sky-900">
+            <span className="inline-flex items-center gap-2">
+              <Cloud className="h-4 w-4" />
+              Criar registro real na Cloudflare
+            </span>
+            <input
+              type="checkbox"
+              checked={form.createInCloudflare}
+              onChange={(event) => updateField("createInCloudflare", event.target.checked)}
+              className="h-4 w-4 rounded border-sky-300 text-sky-600 focus:ring-sky-500"
+            />
+          </label>
+          {form.createInCloudflare ? (
+            <div className="flex gap-3 rounded-md border border-sky-200 bg-white/80 p-3 text-sm text-sky-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>Essa ação criará um registro DNS real no seu domínio.</p>
+            </div>
+          ) : null}
+          {isCloudflareSensitive ? (
+            <div className="flex gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>Este registro parece sensível. Revise nome, tipo e conteúdo antes de criar na Cloudflare.</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div>
         <label className="text-sm font-medium text-zinc-700" htmlFor="record-comment">

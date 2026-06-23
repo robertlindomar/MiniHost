@@ -40,9 +40,11 @@ export function validateDomainInput(input: DomainFormInput) {
 export function validateDnsRecordBody(input: DnsRecordFormInput) {
   const errors = validateRecordInput(input);
 
-  if (!["A", "CNAME", "TXT", "MX"].includes(input.type)) {
+  if (!["A", "AAAA", "CNAME", "TXT", "MX"].includes(input.type)) {
     errors.push("Tipo de registro inválido.");
   }
+
+  const proxied = input.type === "TXT" || input.type === "MX" ? false : Boolean(input.proxied);
 
   return {
     errors,
@@ -52,7 +54,7 @@ export function validateDnsRecordBody(input: DnsRecordFormInput) {
       name: input.name.trim(),
       content: input.value.trim(),
       ttl: input.ttl === "auto" ? null : Number(input.ttl),
-      proxied: Boolean(input.proxied),
+      proxied,
       status: input.status === "inactive" ? "inactive" : "active",
       comment: input.comment?.trim() || null,
       priority: input.type === "MX" ? Number(input.priority) : null

@@ -17,6 +17,37 @@ export function isValidIPv4(value: string) {
   });
 }
 
+export function isValidIPv6(value: string) {
+  const normalized = value.trim();
+
+  if (!normalized || normalized.includes(" ")) {
+    return false;
+  }
+
+  if ((normalized.match(/::/g) ?? []).length > 1) {
+    return false;
+  }
+
+  const isHexSegment = (part: string) => /^[0-9a-fA-F]{1,4}$/.test(part);
+
+  if (normalized.includes("::")) {
+    const [left, right] = normalized.split("::");
+    const leftParts = left ? left.split(":") : [];
+    const rightParts = right ? right.split(":") : [];
+    const parts = [...leftParts, ...rightParts];
+
+    return parts.length <= 7 && parts.every(isHexSegment);
+  }
+
+  const parts = normalized.split(":");
+
+  if (parts.length !== 8) {
+    return false;
+  }
+
+  return parts.every(isHexSegment);
+}
+
 export function isDomainLike(value: string) {
   const normalized = value.trim().toLowerCase();
 
@@ -52,8 +83,16 @@ export function validateRecordInput(input: DnsRecordFormInput) {
     errors.push("Registro A deve parecer um IPv4 válido.");
   }
 
+  if (input.type === "AAAA" && !isValidIPv6(value)) {
+    errors.push("Registro AAAA deve parecer um IPv6 válido.");
+  }
+
   if (input.type === "CNAME" && !isDomainLike(value)) {
     errors.push("Registro CNAME deve parecer um domínio válido.");
+  }
+
+  if ((input.type === "TXT" || input.type === "MX") && input.proxied) {
+    errors.push("Registros TXT e MX não podem usar proxy ativo.");
   }
 
   if (input.type === "MX") {
@@ -79,6 +118,6 @@ export function validateRecordInput(input: DnsRecordFormInput) {
 }
 
 export function isSensitiveRecord(record: Pick<DnsRecord, "name" | "type">) {
-  const sensitiveNames = ["@", "www", "mail"];
+  const sensitiveNames = ["", "@", "www", "mail"];
   return sensitiveNames.includes(record.name.toLowerCase()) || record.type === "MX" || record.type === "TXT";
 }

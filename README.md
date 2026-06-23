@@ -4,7 +4,7 @@ MiniHost é um painel web simples para organizar domínios, subdomínios e regis
 
 O objetivo futuro do projeto é evoluir para uma plataforma de gestão e automação usando PostgreSQL, Cloudflare, Coolify e deploys em VPS.
 
-## Etapa 4 implementada
+## Etapa 5 implementada
 
 - Layout principal com sidebar, header e navegação entre telas.
 - Prisma ORM configurado com PostgreSQL.
@@ -19,10 +19,13 @@ O objetivo futuro do projeto é evoluir para uma plataforma de gestão e automa�
 - Configurações salvas em `app_settings`.
 - Histórico salvo em `audit_logs`.
 - Auditoria associada ao usuário logado quando possível.
-- Integração Cloudflare API em modo somente leitura.
+- Integração Cloudflare API no backend.
 - Sincronização de registros reais da Cloudflare para o PostgreSQL.
+- Criação de registros DNS reais na Cloudflare pelo MiniHost.
+- Opção de criar registros apenas localmente ou criar também na Cloudflare.
 - Identificação visual da origem do registro: Manual ou Cloudflare.
-- Validações simples para registros `A`, `CNAME`, `TXT` e `MX`.
+- Validações para registros `A`, `AAAA`, `CNAME`, `TXT` e `MX`.
+- Bloqueio de duplicidade e conflito entre `CNAME` e `A/AAAA`.
 - Confirmação antes de excluir domínios e registros.
 - Aviso visual ao excluir registros sensíveis como `@`, `www`, `mail`, `MX` ou `TXT`.
 - Tratamento de erro quando o banco está indisponível.
@@ -77,11 +80,13 @@ http://localhost:3000/login
 
 Entre com o admin inicial e acesse o painel.
 
-## Cloudflare Somente Leitura
+## Cloudflare
 
-Crie um API Token na Cloudflare com permissão de leitura de DNS:
+Crie um API Token na Cloudflare com permissões de leitura e edição de DNS:
 
+- Permissão: `Zone` > `Zone` > `Read`
 - Permissão: `Zone` > `DNS` > `Read`
+- Permissão: `Zone` > `DNS` > `Edit`
 - Recurso: inclua a zona/domínio que será sincronizado
 
 Depois preencha no `.env`:
@@ -92,7 +97,21 @@ CLOUDFLARE_API_TOKEN="seu-token"
 
 No MiniHost, edite o domínio e informe o `Zone ID`. Em seguida, vá para `Registros DNS`, selecione o domínio e clique em `Sincronizar com Cloudflare`.
 
-Nesta etapa, o MiniHost apenas lista e sincroniza registros reais da Cloudflare para o PostgreSQL. Ele não cria, não edita e não exclui DNS real.
+Para criar um registro real, abra `Registros DNS`, clique em `Novo registro DNS`, preencha o formulário e marque `Criar registro real na Cloudflare`. Se a opção ficar desmarcada, o MiniHost cria apenas um registro local/manual no PostgreSQL.
+
+Registro local/manual:
+
+- Fica salvo apenas no PostgreSQL.
+- Não altera a Cloudflare.
+- Aparece com origem `Manual`.
+
+Registro real Cloudflare:
+
+- É criado pela API interna do MiniHost no endpoint backend `/api/cloudflare/create-record`.
+- Usa o token apenas no servidor via `CLOUDFLARE_API_TOKEN`.
+- É salvo no PostgreSQL com `cloudflareRecordId`, origem `Cloudflare` e data de sincronização.
+
+Nesta etapa, o MiniHost cria DNS real apenas no fluxo de novo registro. Editar e excluir DNS real ainda não foram implementados.
 
 ## Build
 
@@ -110,11 +129,11 @@ Os testes E2E usam Playwright e cobrem login, logout, proteção de rotas, naveg
 
 ## Próximas etapas sugeridas
 
-1. Configurar tela assistida para Cloudflare API Token e Zone ID.
-2. Listar registros DNS reais com comparação antes/depois.
-3. Criar registros DNS reais com confirmação explícita.
+1. Editar registros DNS reais na Cloudflare com confirmação explícita.
+2. Excluir registros DNS reais na Cloudflare com confirmação explícita.
+3. Melhorar comparação antes/depois da sincronização.
 4. Integrar com Coolify futuramente.
 
 ## Observação
 
-Ainda não há criação, edição ou exclusão de DNS real. Também não há integração com Coolify.
+Ainda não há edição ou exclusão de DNS real. Também não há integração com Coolify.

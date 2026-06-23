@@ -11,6 +11,16 @@ export interface CloudflareDnsRecord {
   modified_on?: string;
 }
 
+export interface CloudflareCreateDnsRecordPayload {
+  type: string;
+  name: string;
+  content: string;
+  ttl: number;
+  proxied?: boolean;
+  priority?: number;
+  comment?: string | null;
+}
+
 interface CloudflareListResponse {
   success: boolean;
   errors: Array<{ code: number; message: string }>;
@@ -22,6 +32,12 @@ interface CloudflareListResponse {
     count: number;
     total_count: number;
   };
+}
+
+interface CloudflareSingleRecordResponse {
+  success: boolean;
+  errors: Array<{ code: number; message: string }>;
+  result: CloudflareDnsRecord;
 }
 
 export class CloudflareApiError extends Error {
@@ -44,7 +60,7 @@ function getApiToken() {
   return token;
 }
 
-function getErrorMessage(status: number, payload?: CloudflareListResponse) {
+function getErrorMessage(status: number, payload?: { errors?: Array<{ code: number; message: string }> }) {
   if (status === 401) {
     return "Token da Cloudflare inválido.";
   }
@@ -101,4 +117,37 @@ export async function listDnsRecords(zoneId: string) {
   } while (page <= totalPages);
 
   return records;
+}
+
+export async function createDnsRecord(zoneId: string, payload: CloudflareCreateDnsRecordPayload) {
+  const token = getApiToken();
+  const url = new URL(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`);
+
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store"
+    });
+  } catch {
+    throw new CloudflareApiError("Não foi possível conectar à Cloudflare.");
+  }
+
+  const responsePayload = (await response.json().catch(() => null)) as CloudflareSingleRecordResponse | null;
+
+  if (!response.ok || !responsePayload?.success) {
+    throw new CloudflareApiError(getErrorMessage(response.status, responsePayload ?? undefined), response.status);
+  }
+
+  if (!responsePayload.result?.id) {
+    throw new CloudflareApiError("Resposta inesperada da Cloudflare.");
+  }
+
+  return responsePayload.result;
 }

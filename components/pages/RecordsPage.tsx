@@ -19,6 +19,15 @@ type NoticeState = { type: "success" | "error" | "info"; message: string } | nul
 type DomainsResponse = { domains: Domain[] };
 type RecordsResponse = { records: DnsRecord[] };
 type CloudflareSyncResponse = { imported: number; updated: number; total: number; records: DnsRecord[] };
+type CloudflareCreateRecordResponse = { message: string; record: DnsRecord };
+
+function formatCloudflareId(id?: string) {
+  if (!id) {
+    return "-";
+  }
+
+  return `${id.slice(0, 8)}...${id.slice(-6)}`;
+}
 
 export function RecordsPage() {
   const searchParams = useSearchParams();
@@ -144,12 +153,18 @@ export function RecordsPage() {
           body: JSON.stringify(input)
         });
         setNotice({ type: "success", message: "Registro DNS editado com sucesso." });
+      } else if (input.createInCloudflare) {
+        const result = await apiRequest<CloudflareCreateRecordResponse>("/api/cloudflare/create-record", {
+          method: "POST",
+          body: JSON.stringify(input)
+        });
+        setNotice({ type: "success", message: result.message || "Registro criado na Cloudflare com sucesso." });
       } else {
         await apiRequest<{ record: DnsRecord }>("/api/records", {
           method: "POST",
           body: JSON.stringify(input)
         });
-        setNotice({ type: "success", message: "Registro DNS criado com sucesso." });
+        setNotice({ type: "success", message: "Registro criado apenas localmente." });
       }
 
       closeModal();
@@ -226,6 +241,10 @@ export function RecordsPage() {
       cell: (record) => (record.lastSyncedAt ? formatDateTime(record.lastSyncedAt) : "-")
     },
     {
+      header: "ID Cloudflare",
+      cell: (record) => <span className="font-mono text-xs text-zinc-500">{formatCloudflareId(record.cloudflareRecordId)}</span>
+    },
+    {
       header: "Status",
       cell: (record) => <StatusBadge status={record.status} />
     },
@@ -264,7 +283,7 @@ export function RecordsPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-zinc-950">Registros DNS</h2>
-          <p className="mt-1 text-sm text-zinc-500">Controle persistido no PostgreSQL para registros A, CNAME, TXT e MX.</p>
+          <p className="mt-1 text-sm text-zinc-500">Controle persistido no PostgreSQL para registros A, AAAA, CNAME, TXT e MX.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <select

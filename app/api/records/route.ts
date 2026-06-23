@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
+import { validateLocalDnsRecordUniqueness } from "@/lib/server/dns-records";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toDnsRecord } from "@/lib/server/mappers";
 import { validateDnsRecordBody } from "@/lib/server/validation";
@@ -54,12 +55,14 @@ export async function POST(request: Request) {
     }
 
     const record = await prisma.$transaction(async (tx) => {
+      await validateLocalDnsRecordUniqueness(tx, domain.id, domain.name, data);
+
       const created = await tx.dnsRecord.create({
         data
       });
 
       await writeAudit(tx, {
-        action: "Registro criado",
+        action: "DNS_RECORD_CREATE_LOCAL",
         entityType: "record",
         entityId: created.id,
         entityName: `${created.type} ${created.name}`,

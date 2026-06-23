@@ -148,12 +148,13 @@ test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Novo registro DNS" }).click();
+    await expect(page.getByText("Criar registro real na Cloudflare")).toBeVisible();
     await page.getByLabel("Tipo do registro").selectOption("A");
     await page.getByLabel("Nome/subdomínio").fill(recordName);
     await page.getByLabel("Valor/conteúdo").fill("72.60.250.40");
     await page.getByRole("button", { name: "Criar registro" }).click();
 
-    await expect(page.getByText("Registro DNS criado com sucesso.")).toBeVisible();
+    await expect(page.getByText("Registro criado apenas localmente.")).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: recordName })).toBeVisible();
 
     const createdRecordRow = page.getByRole("row").filter({ hasText: recordName });
@@ -179,10 +180,10 @@ test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
     await page.getByRole("button", { name: "Cancelar" }).click();
 
     await page.getByRole("link", { name: "Histórico" }).click();
-    await expect(page.getByRole("row").filter({ hasText: "Registro criado" }).filter({ hasText: recordName })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "DNS_RECORD_CREATE_LOCAL" }).filter({ hasText: recordName })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "Registro editado" }).filter({ hasText: editedRecordName })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "Registro excluído" }).filter({ hasText: editedRecordName })).toBeVisible();
-    await expect(page.getByRole("row").filter({ hasText: "Registro criado" }).filter({ hasText: "admin@minihost.local" })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "DNS_RECORD_CREATE_LOCAL" }).filter({ hasText: "admin@minihost.local" })).toBeVisible();
   });
 
   test("configurações salvam no banco", async ({ page }) => {
