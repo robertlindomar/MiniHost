@@ -1,10 +1,33 @@
 export type EntityStatus = "active" | "inactive";
 
+export type ProjectStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "ARCHIVED";
+
 export type DnsRecordStatus = EntityStatus | "DELETED";
 
 export type DnsRecordType = "A" | "AAAA" | "CNAME" | "TXT" | "MX";
 
 export type TtlValue = "auto" | number;
+
+export interface Project {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  status: ProjectStatus;
+  mainDomain?: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  recordCount?: number;
+}
+
+export interface ProjectFormInput {
+  name: string;
+  slug: string;
+  description?: string;
+  status: ProjectStatus;
+  mainDomain?: string;
+}
 
 export interface Domain {
   id: string;
@@ -19,6 +42,8 @@ export interface Domain {
 export interface DnsRecord {
   id: string;
   domainId: string;
+  projectId?: string;
+  projectName?: string;
   type: DnsRecordType;
   name: string;
   value: string;
@@ -40,7 +65,7 @@ export interface DnsRecord {
 export interface HistoryItem {
   id: string;
   action: string;
-  entityType: "domain" | "record" | "settings";
+  entityType: "domain" | "record" | "settings" | "project";
   entityId?: string;
   entityName: string;
   userId?: string;
@@ -88,4 +113,6 @@ export interface DnsRecordFormInput {
   priority?: number;
   createInCloudflare?: boolean;
   templateName?: string;
+  projectId?: string;
+  fromProjectTemplate?: boolean;
 }

@@ -5,18 +5,23 @@ import { useState } from "react";
 import type { RecordDisplayMode } from "@/components/records/DnsRecordsTable";
 import type { RecordVisibilityFilter } from "@/components/records/RecordsFilters";
 import { FieldInfoTooltip } from "@/components/ui/FieldInfoTooltip";
-import type { Domain } from "@/lib/types";
+import type { Domain, Project } from "@/lib/types";
+
+export type ProjectFilter = "all" | "none" | string;
 
 interface RecordsToolbarProps {
   searchTerm: string;
   visibilityFilter: RecordVisibilityFilter;
   domainFilter: string;
+  projectFilter: ProjectFilter;
   displayMode: RecordDisplayMode;
   domains: Domain[];
+  projects: Project[];
   isLoading?: boolean;
   onSearchChange: (value: string) => void;
   onVisibilityChange: (value: RecordVisibilityFilter) => void;
   onDomainChange: (value: string) => void;
+  onProjectChange: (value: ProjectFilter) => void;
   onDisplayModeChange: (value: RecordDisplayMode) => void;
   onExport: () => void;
   onCreate: () => void;
@@ -26,12 +31,15 @@ export function RecordsToolbar({
   searchTerm,
   visibilityFilter,
   domainFilter,
+  projectFilter,
   displayMode,
   domains,
+  projects,
   isLoading = false,
   onSearchChange,
   onVisibilityChange,
   onDomainChange,
+  onProjectChange,
   onDisplayModeChange,
   onExport,
   onCreate
@@ -93,7 +101,7 @@ export function RecordsToolbar({
       </div>
 
       {isFiltersOpen ? (
-        <div className="mt-4 grid gap-3 border-t border-zinc-100 pt-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-3 border-t border-zinc-100 pt-4 md:grid-cols-3">
           <div>
             <label className="text-xs font-semibold uppercase text-zinc-500" htmlFor="records-visibility-filter">
               Status
@@ -125,6 +133,26 @@ export function RecordsToolbar({
               {domains.map((domain) => (
                 <option key={domain.id} value={domain.id}>
                   {domain.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase text-zinc-500" htmlFor="records-project-filter">
+              Projeto
+            </label>
+            <select
+              id="records-project-filter"
+              value={projectFilter}
+              disabled={isLoading}
+              onChange={(event) => onProjectChange(event.target.value)}
+              className="mt-1 h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400"
+            >
+              <option value="all">Todos</option>
+              <option value="none">Sem projeto</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
                 </option>
               ))}
             </select>

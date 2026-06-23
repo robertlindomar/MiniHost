@@ -8,6 +8,7 @@ import { DomainsPageHeader } from "@/components/domains/DomainsPageHeader";
 import { DomainForm } from "@/components/forms/DomainForm";
 import { Modal } from "@/components/ui/Modal";
 import { Toast } from "@/components/ui/Toast";
+import { pageContainerClass } from "@/components/layout/page-container";
 import { apiRequest } from "@/lib/api-client";
 import type { Domain, DomainFormInput, DnsRecord } from "@/lib/types";
 
@@ -169,7 +170,7 @@ export function DomainsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-7">
+    <div className={pageContainerClass}>
       {toast ? <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} /> : null}
 
       <DomainsPageHeader onCreate={openCreateModal} disabled={isLoading} />

@@ -120,7 +120,7 @@ function InlineEditRow({
   onSave: () => void;
   onDelete: () => void;
 }) {
-  const colSpan = displayMode === "detailed" ? 12 : 8;
+  const colSpan = displayMode === "detailed" ? 13 : 9;
   const proxyLocked = isProxyLocked(record.type);
 
   return (
@@ -301,7 +301,7 @@ export function DnsRecordsTable({
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editState, setEditState] = useState<QuickEditState | null>(null);
   const [savingRecordId, setSavingRecordId] = useState<string | null>(null);
-  const tableMinWidth = displayMode === "detailed" ? "min-w-[1480px]" : "min-w-[980px]";
+  const tableMinWidth = displayMode === "detailed" ? "min-w-[1580px]" : "min-w-[1080px]";
 
   function startEdit(record: DnsRecord) {
     setEditingRecordId(record.id);
@@ -348,6 +348,7 @@ export function DnsRecordsTable({
                 <th className="px-4 py-3">Status do proxy</th>
                 <th className="px-4 py-3">TTL</th>
                 <th className="px-4 py-3">Origem</th>
+                <th className="px-4 py-3">Projeto</th>
                 <th className="px-4 py-3">Status</th>
                 {displayMode === "detailed" ? (
                   <>
@@ -388,6 +389,7 @@ export function DnsRecordsTable({
                       <td className="px-4 py-4">
                         <OriginBadge source={record.source} />
                       </td>
+                      <td className="px-4 py-4 text-zinc-600">{record.projectName ?? "Sem projeto"}</td>
                       <td className="px-4 py-4">
                         <RecordStatusBadge record={record} />
                       </td>

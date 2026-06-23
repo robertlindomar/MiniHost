@@ -14,6 +14,7 @@ export type AuditEntityFilter =
   | "all"
   | "domain"
   | "record"
+  | "project"
   | "cloudflare"
   | "template"
   | "settings"
@@ -153,6 +154,10 @@ export function getEntityFilterCategory(item: HistoryItem): AuditEntityFilter {
     return "record";
   }
 
+  if (item.entityType === "project") {
+    return "project";
+  }
+
   if (item.entityType === "settings") {
     return "settings";
   }
@@ -210,6 +215,13 @@ export function getEntityDisplay(item: HistoryItem) {
   if (item.entityType === "domain") {
     return {
       label: "Domínio",
+      identifier: item.entityName
+    };
+  }
+
+  if (item.entityType === "project") {
+    return {
+      label: "Projeto",
       identifier: item.entityName
     };
   }

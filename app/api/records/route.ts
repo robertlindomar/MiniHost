@@ -18,9 +18,20 @@ function normalizeRecordInput(body: Partial<DnsRecordFormInput>): DnsRecordFormI
     status: body.status === "inactive" ? "inactive" : "active",
     comment: body.comment ? String(body.comment) : "",
     priority: body.priority === undefined || body.priority === null ? undefined : Number(body.priority),
-    templateName: body.templateName ? String(body.templateName) : undefined
+    templateName: body.templateName ? String(body.templateName) : undefined,
+    projectId: body.projectId ? String(body.projectId) : undefined,
+    fromProjectTemplate: Boolean(body.fromProjectTemplate)
   };
 }
+
+const recordInclude = {
+  project: {
+    select: {
+      id: true,
+      name: true
+    }
+  }
+} as const;
 
 export async function GET(request: Request) {
   try {
@@ -41,6 +52,7 @@ export async function GET(request: Request) {
         ...(domainId ? { domainId } : {}),
         ...statusFilter
       },
+      include: recordInclude,
       orderBy: { updatedAt: "desc" }
     });
 
@@ -66,25 +78,50 @@ export async function POST(request: Request) {
       return fail("Domínio não encontrado.", 404);
     }
 
+    if (data.projectId) {
+      const project = await prisma.project.findUnique({ where: { id: data.projectId } });
+
+      if (!project) {
+        return fail("Projeto não encontrado.", 404);
+      }
+
+      if (project.status === "ARCHIVED") {
+        return fail("Não é possível vincular registros a um projeto arquivado.");
+      }
+    }
+
     const record = await prisma.$transaction(async (tx) => {
       await validateLocalDnsRecordUniqueness(tx, domain.id, domain.name, data);
 
       const created = await tx.dnsRecord.create({
-        data
+        data,
+        include: recordInclude
       });
 
+      const action = body.fromProjectTemplate
+        ? "DNS_RECORD_CREATE_FROM_PROJECT_TEMPLATE"
+        : body.templateName
+          ? "DNS_RECORD_CREATE_FROM_TEMPLATE_LOCAL"
+          : "DNS_RECORD_CREATE_LOCAL";
+
+      const description = body.fromProjectTemplate
+        ? `Registro ${created.type} ${created.name} criado em ${domain.name} pelo template ${body.templateName} no projeto.`
+        : body.templateName
+          ? `Registro ${created.type} ${created.name} criado em ${domain.name} pelo template ${body.templateName}.`
+          : `Registro ${created.type} ${created.name} criado em ${domain.name}.`;
+
       await writeAudit(tx, {
-        action: body.templateName ? "DNS_RECORD_CREATE_FROM_TEMPLATE_LOCAL" : "DNS_RECORD_CREATE_LOCAL",
+        action,
         entityType: "record",
         entityId: created.id,
         entityName: `${created.type} ${created.name}`,
         userId: user.id,
-        description: body.templateName
-          ? `Registro ${created.type} ${created.name} criado em ${domain.name} pelo template ${body.templateName}.`
-          : `Registro ${created.type} ${created.name} criado em ${domain.name}.`,
+        description,
         newData: {
           ...toDnsRecord(created),
           templateName: body.templateName,
+          projectId: data.projectId,
+          projectName: created.project?.name,
           domain: domain.name
         }
       });

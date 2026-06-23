@@ -4,6 +4,25 @@ MiniHost é um painel web simples para organizar domínios, subdomínios e regis
 
 O objetivo futuro do projeto é evoluir para uma plataforma de gestão e automação usando PostgreSQL, Cloudflare, Coolify e deploys em VPS.
 
+## Etapa 9 implementada
+
+- Model `Project` no Prisma com status `DRAFT`, `ACTIVE`, `PAUSED` e `ARCHIVED`.
+- Relacionamento opcional `projectId` em `DnsRecord`.
+- Página **Projetos** (`/projects`) com listagem, busca e filtros por status.
+- CRUD de projetos: criar, editar, listar, ver detalhes e arquivar (sem exclusão permanente).
+- Página de detalhes do projeto (`/projects/[id]`).
+- Vincular registros DNS existentes a um projeto.
+- Desvincular registros DNS de um projeto sem excluir o registro.
+- Criar DNS por template dentro do projeto (API, App, Painel, Subdomínio).
+- Registros criados dentro do projeto salvam `projectId` automaticamente.
+- Coluna **Projeto** na tabela geral de registros DNS.
+- Filtros na tabela DNS: Todos, Sem projeto, Por projeto.
+- Dashboard com cards de projetos e seção **Projetos recentes**.
+- Histórico com ações: `PROJECT_CREATE`, `PROJECT_UPDATE`, `PROJECT_ARCHIVE`, `DNS_RECORD_LINK_PROJECT`, `DNS_RECORD_UNLINK_PROJECT`, `DNS_RECORD_CREATE_FROM_PROJECT_TEMPLATE`.
+- Item **Projetos** no menu lateral.
+
+**Importante:** projetos ainda **não** criam banco PostgreSQL, **não** integram com Coolify e **não** automatizam deploy. Esta etapa é apenas para organizar registros DNS.
+
 ## Etapa 8 implementada
 
 - Layout principal com sidebar, header e navegação entre telas.
@@ -226,6 +245,41 @@ Diferença:
 
 O Dashboard também mostra atalhos rápidos para `Novo API`, `Novo Painel`, `Novo App` e `Novo Subdomínio`.
 
+## Projetos
+
+Projetos agrupam registros DNS relacionados a um mesmo sistema ou aplicação.
+
+### Criar projeto
+
+1. Acesse `Projetos` no menu lateral.
+2. Clique em `Novo projeto`.
+3. Preencha nome, slug, descrição, status e domínio principal.
+4. O slug deve ser único e conter apenas letras minúsculas, números e hífen (ex.: `systagio`).
+
+### Vincular DNS existente
+
+1. Abra os detalhes do projeto (`Ver detalhes`).
+2. Clique em `Vincular DNS existente`.
+3. Selecione os registros desejados (apenas registros sem projeto aparecem).
+4. Confirme com `Vincular ao projeto`.
+
+Para desvincular, use `Desvincular` na tabela de registros do projeto. O registro DNS permanece no sistema.
+
+### Criar DNS por template dentro do projeto
+
+Na tela de detalhes do projeto, use os atalhos:
+
+- `Novo API`
+- `Novo App`
+- `Novo Painel`
+- `Novo Subdomínio`
+
+Eles reutilizam a lógica dos Templates DNS. A diferença é que o novo registro é salvo com `projectId` do projeto automaticamente.
+
+### Arquivar projeto
+
+Na listagem de projetos, clique em `Arquivar`. O projeto muda para status `ARCHIVED` e recebe `archivedAt`, mas os registros DNS vinculados **não são excluídos**.
+
 ## Build
 
 ```bash
@@ -242,10 +296,10 @@ Os testes E2E usam Playwright e cobrem login, logout, proteção de rotas, naveg
 
 ## Próximas etapas sugeridas
 
-1. Criar grupos de registros por projeto.
+1. Módulo de banco PostgreSQL por projeto.
 2. Melhorar comparação antes/depois da sincronização.
 3. Integrar com Coolify futuramente.
 
 ## Observação
 
-A exclusão real na Cloudflare já está disponível com confirmação forte. Ainda não há integração com Coolify.
+A exclusão real na Cloudflare já está disponível com confirmação forte. Projetos organizam DNS, mas ainda não criam banco nem integram com Coolify.

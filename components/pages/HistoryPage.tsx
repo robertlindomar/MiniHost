@@ -9,6 +9,7 @@ import { HistoryPageHeader } from "@/components/history/HistoryPageHeader";
 import { HistorySearchInput } from "@/components/history/HistorySearchInput";
 import type { PageSize } from "@/components/history/Pagination";
 import { Toast } from "@/components/ui/Toast";
+import { pageContainerCompactClass } from "@/components/layout/page-container";
 import { apiRequest } from "@/lib/api-client";
 import {
   exportHistoryToCsv,
@@ -156,7 +157,7 @@ export function HistoryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className={pageContainerCompactClass}>
       <HistoryPageHeader
         isRefreshing={isRefreshing}
         isExporting={isExporting}

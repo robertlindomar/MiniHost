@@ -1,26 +1,30 @@
 "use client";
 
-import { Clock3, Database, Globe2, ShieldCheck } from "lucide-react";
+import { Clock3, Database, FolderKanban, Globe2, Link2Off, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { QuickTemplatesCard } from "@/components/dashboard/QuickTemplatesCard";
 import { RecentDnsTable } from "@/components/dashboard/RecentDnsTable";
+import { RecentProjectsSection } from "@/components/dashboard/RecentProjectsSection";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { formatRelativeTime } from "@/components/dashboard/time";
 import { Notice } from "@/components/ui/Notice";
+import { pageContainerClass } from "@/components/layout/page-container";
 import { apiRequest } from "@/lib/api-client";
 import { formatDateTime } from "@/lib/format";
-import type { DnsRecord, Domain, HistoryItem } from "@/lib/types";
+import type { DnsRecord, Domain, HistoryItem, Project } from "@/lib/types";
 
 interface DashboardResponse {
   domains: Domain[];
   records: DnsRecord[];
+  projects: Project[];
   history: HistoryItem[];
 }
 
 export function DashboardPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [records, setRecords] = useState<DnsRecord[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +36,7 @@ export function DashboardPage() {
         const data = await apiRequest<DashboardResponse>("/api/dashboard");
         setDomains(data.domains);
         setRecords(data.records);
+        setProjects(data.projects);
         setHistory(data.history);
         setError(null);
       } catch (requestError) {
@@ -45,6 +50,13 @@ export function DashboardPage() {
   }, []);
 
   const activeRecords = useMemo(() => records.filter((record) => record.status === "active"), [records]);
+
+  const activeProjects = useMemo(() => projects.filter((project) => project.status === "ACTIVE"), [projects]);
+  const archivedProjects = useMemo(() => projects.filter((project) => project.status === "ARCHIVED"), [projects]);
+  const recordsWithoutProject = useMemo(
+    () => activeRecords.filter((record) => !record.projectId),
+    [activeRecords]
+  );
 
   const latestRecords = useMemo(
     () => [...records].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5),
@@ -66,7 +78,7 @@ export function DashboardPage() {
   }, [activeRecords]);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-7">
+    <div className={pageContainerClass}>
       <PageHeader
         title="Visão geral"
         description="Bem-vindo ao MiniHost. Gerencie seus domínios, registros DNS e integrações de infraestrutura de forma simples, segura e eficiente."
@@ -108,6 +120,43 @@ export function DashboardPage() {
           isLoading={isLoading}
         />
       </section>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Total de projetos"
+          value={projects.length}
+          description="Projetos cadastrados no painel"
+          icon={<FolderKanban className="h-5 w-5" />}
+          tone="blue"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Projetos ativos"
+          value={activeProjects.length}
+          description="Projetos em operação"
+          icon={<FolderKanban className="h-5 w-5" />}
+          tone="emerald"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Projetos arquivados"
+          value={archivedProjects.length}
+          description="Projetos arquivados sem exclusão"
+          icon={<FolderKanban className="h-5 w-5" />}
+          tone="amber"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="DNS sem projeto"
+          value={recordsWithoutProject.length}
+          description="Registros ainda não agrupados"
+          icon={<Link2Off className="h-5 w-5" />}
+          tone="violet"
+          isLoading={isLoading}
+        />
+      </section>
+
+      <RecentProjectsSection projects={projects} isLoading={isLoading} />
 
       <QuickTemplatesCard />
 

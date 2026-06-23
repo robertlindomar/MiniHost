@@ -48,6 +48,11 @@ export function isValidIPv6(value: string) {
   return parts.every(isHexSegment);
 }
 
+export function isValidProjectSlug(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalized);
+}
+
 export function isDomainLike(value: string) {
   const normalized = value.trim().toLowerCase();
 

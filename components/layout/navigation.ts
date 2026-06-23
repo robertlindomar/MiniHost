@@ -1,4 +1,5 @@
 import {
+  FolderKanban,
   Globe2,
   History,
   Layers3,
@@ -17,6 +18,7 @@ export interface NavigationItem {
 export const navigation: NavigationItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/domains", label: "Domínios", icon: Globe2 },
+  { href: "/projects", label: "Projetos", icon: FolderKanban },
   { href: "/records", label: "Registros DNS", icon: ListTree },
   { href: "/templates", label: "Templates DNS", icon: Layers3 },
   { href: "/history", label: "Histórico", icon: History },
@@ -36,6 +38,10 @@ export const pageMetaByHref: Record<string, PageMeta> = {
   "/domains": {
     title: "Domínios cadastrados",
     description: "Gerencie os domínios conectados à MiniHost e sincronizados com a Cloudflare."
+  },
+  "/projects": {
+    title: "Projetos",
+    description: "Organize registros DNS relacionados a um mesmo sistema ou aplicação."
   },
   "/records": {
     title: "Registros DNS",
@@ -64,6 +70,13 @@ export function getActiveNavigationItem(pathname: string) {
 }
 
 export function getPageMeta(pathname: string): PageMeta {
+  if (pathname.startsWith("/projects/") && pathname !== "/projects") {
+    return {
+      title: "Detalhes do projeto",
+      description: "Visualize informações, registros DNS vinculados e ações rápidas do projeto."
+    };
+  }
+
   const activeItem = getActiveNavigationItem(pathname);
   return pageMetaByHref[activeItem.href] ?? pageMetaByHref["/dashboard"];
 }

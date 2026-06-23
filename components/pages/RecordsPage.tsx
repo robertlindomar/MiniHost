@@ -11,12 +11,15 @@ import { RecordsLoadingState } from "@/components/records/RecordsLoadingState";
 import { RecordsPageHeader } from "@/components/records/RecordsPageHeader";
 import { RecordsToolbar } from "@/components/records/RecordsToolbar";
 import { Toast } from "@/components/ui/Toast";
+import { pageContainerClass } from "@/components/layout/page-container";
 import { apiRequest } from "@/lib/api-client";
-import type { DnsRecord, DnsRecordFormInput, Domain } from "@/lib/types";
+import type { DnsRecord, DnsRecordFormInput, Domain, Project } from "@/lib/types";
+import type { ProjectFilter } from "@/components/records/RecordsToolbar";
 
 type ToastState = { type: "success" | "error" | "info"; message: string } | null;
 type DomainsResponse = { domains: Domain[] };
 type RecordsResponse = { records: DnsRecord[] };
+type ProjectsResponse = { projects: Project[] };
 type CloudflareSyncResponse = { imported: number; updated: number; total: number; records: DnsRecord[] };
 type CloudflareCreateRecordResponse = { message: string; record: DnsRecord };
 type CloudflareUpdateRecordResponse = { message: string; record: DnsRecord };
@@ -32,8 +35,10 @@ export function RecordsPage() {
   const searchParams = useSearchParams();
   const domainFromUrl = searchParams.get("domain");
   const [domains, setDomains] = useState<Domain[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<DnsRecord[]>([]);
   const [domainFilter, setDomainFilter] = useState(domainFromUrl ?? "all");
+  const [projectFilter, setProjectFilter] = useState<ProjectFilter>("all");
   const [visibilityFilter, setVisibilityFilter] = useState<RecordVisibilityFilter>("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [displayMode, setDisplayMode] = useState<RecordDisplayMode>("compact");
@@ -49,11 +54,13 @@ export function RecordsPage() {
   async function reload(visibility: RecordVisibilityFilter = visibilityFilter) {
     try {
       setIsLoading(true);
-      const [domainData, recordData] = await Promise.all([
+      const [domainData, projectData, recordData] = await Promise.all([
         apiRequest<DomainsResponse>("/api/domains"),
+        apiRequest<ProjectsResponse>("/api/projects"),
         apiRequest<RecordsResponse>(`/api/records?visibility=${visibility}`)
       ]);
       setDomains(domainData.domains);
+      setProjects(projectData.projects);
       setRecords(recordData.records);
     } catch (requestError) {
       setToast({
@@ -96,6 +103,14 @@ export function RecordsPage() {
         return false;
       }
 
+      if (projectFilter === "none" && record.projectId) {
+        return false;
+      }
+
+      if (projectFilter !== "all" && projectFilter !== "none" && record.projectId !== projectFilter) {
+        return false;
+      }
+
       if (!normalizedSearch) {
         return true;
       }
@@ -115,11 +130,12 @@ export function RecordsPage() {
         record.comment ?? "",
         record.cloudflareRecordId ?? "",
         record.source,
+        record.projectName ?? "",
         domainName,
         fullName
       ].some((value) => value.toLowerCase().includes(normalizedSearch));
     });
-  }, [domainById, domainFilter, records, searchTerm]);
+  }, [domainById, domainFilter, projectFilter, records, searchTerm]);
 
   const syncDomain = useMemo(() => {
     if (domainFilter !== "all") {
@@ -141,7 +157,11 @@ export function RecordsPage() {
 
     return "Este domínio não possui Zone ID na Cloudflare. Configure em Domínios ou Configurações para habilitar a sincronização.";
   }, [canSync, domainFilter, syncDomain]);
-  const isFiltered = domainFilter !== "all" || visibilityFilter !== "active" || searchTerm.trim().length > 0;
+  const isFiltered =
+    domainFilter !== "all" ||
+    projectFilter !== "all" ||
+    visibilityFilter !== "active" ||
+    searchTerm.trim().length > 0;
   const pendingDomain = pendingCloudflareUpdate ? domainById.get(pendingCloudflareUpdate.record.domainId) : undefined;
 
   function openCreateModal() {
@@ -373,7 +393,7 @@ export function RecordsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-7">
+    <div className={pageContainerClass}>
       {toast ? <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} /> : null}
 
       <RecordsPageHeader
@@ -388,12 +408,15 @@ export function RecordsPage() {
         searchTerm={searchTerm}
         visibilityFilter={visibilityFilter}
         domainFilter={domainFilter}
+        projectFilter={projectFilter}
         displayMode={displayMode}
         domains={domains}
+        projects={projects}
         isLoading={isLoading}
         onSearchChange={setSearchTerm}
         onVisibilityChange={setVisibilityFilter}
         onDomainChange={setDomainFilter}
+        onProjectChange={setProjectFilter}
         onDisplayModeChange={setDisplayMode}
         onExport={handleExport}
         onCreate={openCreateModal}

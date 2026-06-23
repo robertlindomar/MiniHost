@@ -228,7 +228,15 @@ function ProxyBadge({ proxied }: { proxied: boolean }) {
   );
 }
 
-export function DnsTemplatesPanel({ mode = "cards" }: { mode?: "cards" | "quick" }) {
+export function DnsTemplatesPanel({
+  mode = "cards",
+  projectId,
+  onRecordCreated
+}: {
+  mode?: "cards" | "quick";
+  projectId?: string;
+  onRecordCreated?: () => void;
+}) {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [settings, setSettings] = useState<MiniHostSettings | null>(null);
   const [cloudflareConfigured, setCloudflareConfigured] = useState(false);
@@ -376,7 +384,9 @@ export function DnsTemplatesPanel({ mode = "cards" }: { mode?: "cards" | "quick"
       proxied: selectedTemplate.type === "TXT" || selectedTemplate.type === "MX" ? false : Boolean(form.proxied),
       status: "active",
       comment: form.comment.trim() || undefined,
-      templateName: selectedTemplate.name
+      templateName: selectedTemplate.name,
+      projectId,
+      fromProjectTemplate: Boolean(projectId)
     };
 
     try {
@@ -390,6 +400,7 @@ export function DnsTemplatesPanel({ mode = "cards" }: { mode?: "cards" | "quick"
         message: createInCloudflare ? "Template aplicado na Cloudflare com sucesso." : "Template aplicado localmente com sucesso."
       });
       setSelectedTemplate(null);
+      onRecordCreated?.();
     } catch (requestError) {
       setNotice({
         type: "error",

@@ -13,6 +13,7 @@ import { SettingsStatusBadge } from "@/components/settings/SettingsStatusBadge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Toast } from "@/components/ui/Toast";
 import { FieldInfoTooltip } from "@/components/ui/FieldInfoTooltip";
+import { pageContainerNarrowClass } from "@/components/layout/page-container";
 import { apiRequest } from "@/lib/api-client";
 import { MASKED_SECRET_VALUE, validateSettingsInput, type SettingsFieldErrors } from "@/lib/settings";
 import type { CloudflareStatus, Domain, MiniHostSettings } from "@/lib/types";
@@ -245,7 +246,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className={pageContainerNarrowClass}>
       <SettingsPageHeader isSaving={isSaving} disableSave={isLoading} />
 
       {isLoading ? (

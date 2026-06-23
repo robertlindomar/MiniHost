@@ -18,6 +18,13 @@ enum CloudflareCredentialStatus {
   DISABLED
 }
 
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
 model User {
   id           String     @id @default(cuid())
   name         String
@@ -44,9 +51,26 @@ model Domain {
   @@map("domains")
 }
 
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  description String?
+  status      ProjectStatus @default(DRAFT)
+  mainDomain  String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  archivedAt  DateTime?
+  records     DnsRecord[]
+
+  @@index([status])
+  @@map("projects")
+}
+
 model DnsRecord {
   id                 String    @id @default(cuid())
   domainId           String
+  projectId          String?
   type               String
   name               String
   content            String
@@ -64,8 +88,10 @@ model DnsRecord {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   domain             Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  project            Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([domainId])
+  @@index([projectId])
   @@index([source])
   @@index([status])
   @@map("dns_records")

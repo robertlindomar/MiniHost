@@ -1,6 +1,6 @@
-import type { DnsRecordFormInput, DomainFormInput, MiniHostSettings } from "@/lib/types";
+import type { DnsRecordFormInput, DomainFormInput, MiniHostSettings, ProjectFormInput } from "@/lib/types";
 import { validateSettingsInput } from "@/lib/settings";
-import { isDomainLike, isPlausibleZoneId, validateRecordInput } from "@/lib/validation";
+import { isDomainLike, isPlausibleZoneId, isValidProjectSlug, validateRecordInput } from "@/lib/validation";
 
 export function validateDomainInput(input: DomainFormInput) {
   const errors: string[] = [];
@@ -70,6 +70,7 @@ export function validateDnsRecordBody(input: DnsRecordFormInput) {
     errors,
     data: {
       domainId: input.domainId,
+      projectId: input.projectId?.trim() || null,
       type: input.type,
       name: input.name.trim(),
       content: input.value.trim(),
@@ -78,6 +79,46 @@ export function validateDnsRecordBody(input: DnsRecordFormInput) {
       status: input.status === "inactive" ? "inactive" : "active",
       comment: input.comment?.trim() || null,
       priority: input.type === "MX" ? Number(input.priority) : null
+    }
+  };
+}
+
+export function validateProjectInput(input: ProjectFormInput) {
+  const errors: string[] = [];
+  const name = input.name?.trim();
+  const slug = input.slug?.trim().toLowerCase();
+  const description = input.description?.trim() || null;
+  const mainDomain = input.mainDomain?.trim().toLowerCase() || null;
+  const validStatuses = ["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED"] as const;
+
+  if (!name) {
+    errors.push("Informe o nome do projeto.");
+  }
+
+  if (!slug) {
+    errors.push("Informe o slug do projeto.");
+  }
+
+  if (slug && !isValidProjectSlug(slug)) {
+    errors.push("Slug deve conter apenas letras minúsculas, números e hífen.");
+  }
+
+  if (mainDomain && !isDomainLike(mainDomain)) {
+    errors.push("Domínio principal deve parecer um domínio válido.");
+  }
+
+  if (!validStatuses.includes(input.status)) {
+    errors.push("Status do projeto inválido.");
+  }
+
+  return {
+    errors,
+    data: {
+      name,
+      slug,
+      description,
+      status: input.status,
+      mainDomain
     }
   };
 }

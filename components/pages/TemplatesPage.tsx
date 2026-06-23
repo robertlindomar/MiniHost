@@ -1,5 +1,6 @@
 "use client";
 
+import { pageContainerClass } from "@/components/layout/page-container";
 import { DnsTemplatesPanel } from "@/components/templates/DnsTemplatesPanel";
 import { FieldInfoTooltip } from "@/components/ui/FieldInfoTooltip";
 
@@ -8,7 +9,7 @@ const TEMPLATES_PAGE_INFO =
 
 export function TemplatesPage() {
   return (
-    <div className="mx-auto max-w-7xl space-y-7">
+    <div className={pageContainerClass}>
       <div>
         <div className="flex items-center gap-2">
           <h2 className="text-2xl font-semibold text-zinc-950 md:text-3xl">Templates DNS</h2>

@@ -2,9 +2,23 @@ import type {
   AppSetting,
   AuditLog,
   DnsRecord as PrismaDnsRecord,
-  Domain as PrismaDomain
+  Domain as PrismaDomain,
+  Project as PrismaProject
 } from "@prisma/client";
-import type { DnsRecord, DnsRecordStatus, Domain, HistoryItem, MiniHostSettings } from "@/lib/types";
+import type { DnsRecord, DnsRecordStatus, Domain, HistoryItem, MiniHostSettings, Project, ProjectStatus } from "@/lib/types";
+
+type DnsRecordWithProject = PrismaDnsRecord & {
+  project?: {
+    id: string;
+    name: string;
+  } | null;
+};
+
+type ProjectWithCount = PrismaProject & {
+  _count?: {
+    records: number;
+  };
+};
 
 type AuditLogWithUser = AuditLog & {
   user?: {
@@ -19,6 +33,29 @@ export const defaultSettings: MiniHostSettings = {
   defaultVpsIp: "",
   defaultProxyEnabled: true
 };
+
+export function toProjectStatus(status: string): ProjectStatus {
+  if (status === "ACTIVE" || status === "PAUSED" || status === "ARCHIVED") {
+    return status;
+  }
+
+  return "DRAFT";
+}
+
+export function toProject(project: ProjectWithCount): Project {
+  return {
+    id: project.id,
+    name: project.name,
+    slug: project.slug,
+    description: project.description ?? undefined,
+    status: toProjectStatus(project.status),
+    mainDomain: project.mainDomain ?? undefined,
+    createdAt: project.createdAt.toISOString(),
+    updatedAt: project.updatedAt.toISOString(),
+    archivedAt: project.archivedAt?.toISOString(),
+    recordCount: project._count?.records
+  };
+}
 
 export function toDomain(domain: PrismaDomain): Domain {
   return {
@@ -40,10 +77,12 @@ export function toDnsRecordStatus(status: string): DnsRecordStatus {
   return status === "inactive" ? "inactive" : "active";
 }
 
-export function toDnsRecord(record: PrismaDnsRecord): DnsRecord {
+export function toDnsRecord(record: DnsRecordWithProject): DnsRecord {
   return {
     id: record.id,
     domainId: record.domainId,
+    projectId: record.projectId ?? undefined,
+    projectName: record.project?.name,
     type: record.type as DnsRecord["type"],
     name: record.name,
     value: record.content,
@@ -68,7 +107,10 @@ export function toHistoryItem(item: AuditLogWithUser): HistoryItem {
     id: item.id,
     action: item.action,
     entityType:
-      item.entityType === "domain" || item.entityType === "record" || item.entityType === "settings"
+      item.entityType === "domain" ||
+      item.entityType === "record" ||
+      item.entityType === "settings" ||
+      item.entityType === "project"
         ? item.entityType
         : "settings",
     entityId: item.entityId ?? undefined,

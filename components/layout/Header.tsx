@@ -22,7 +22,7 @@ export function Header({
 }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur">
-      <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+      <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5 lg:px-5">
         <div className="flex min-w-0 items-start gap-3">
           <button
             type="button"

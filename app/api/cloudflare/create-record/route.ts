@@ -24,7 +24,9 @@ function normalizeRecordInput(body: CreateCloudflareRecordBody): DnsRecordFormIn
     status: body.status === "inactive" ? "inactive" : "active",
     comment: body.comment ? String(body.comment) : "",
     priority: body.priority === undefined || body.priority === null ? undefined : Number(body.priority),
-    templateName: body.templateName ? String(body.templateName) : undefined
+    templateName: body.templateName ? String(body.templateName) : undefined,
+    projectId: body.projectId ? String(body.projectId) : undefined,
+    fromProjectTemplate: Boolean(body.fromProjectTemplate)
   };
 }
 
@@ -61,6 +63,18 @@ export async function POST(request: Request) {
 
     if (!domain.zoneId) {
       return fail("Para criar registro real na Cloudflare, configure o Zone ID deste domínio.");
+    }
+
+    if (data.projectId) {
+      const project = await prisma.project.findUnique({ where: { id: data.projectId } });
+
+      if (!project) {
+        return fail("Projeto não encontrado.", 404);
+      }
+
+      if (project.status === "ARCHIVED") {
+        return fail("Não é possível vincular registros a um projeto arquivado.");
+      }
     }
 
     const localRecords = await prisma.dnsRecord.findMany({
@@ -101,6 +115,7 @@ export async function POST(request: Request) {
       const created = await tx.dnsRecord.create({
         data: {
           domainId: domain.id,
+          projectId: data.projectId,
           type: cloudflareRecord.type,
           name: toComparableRecordName(cloudflareRecord.name, domain.name),
           content: cloudflareRecord.content,
@@ -112,21 +127,41 @@ export async function POST(request: Request) {
           cloudflareRecordId: cloudflareRecord.id,
           source: "cloudflare",
           lastSyncedAt: syncedAt
+        },
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
         }
       });
 
+      const action = body.fromProjectTemplate
+        ? "DNS_RECORD_CREATE_FROM_PROJECT_TEMPLATE"
+        : body.templateName
+          ? "DNS_RECORD_CREATE_FROM_TEMPLATE_CLOUDFLARE"
+          : "DNS_RECORD_CREATE_CLOUDFLARE";
+
+      const description = body.fromProjectTemplate
+        ? `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name} pelo template ${body.templateName} no projeto.`
+        : body.templateName
+          ? `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name} pelo template ${body.templateName}.`
+          : `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name}.`;
+
       await writeAudit(tx, {
-        action: body.templateName ? "DNS_RECORD_CREATE_FROM_TEMPLATE_CLOUDFLARE" : "DNS_RECORD_CREATE_CLOUDFLARE",
+        action,
         entityType: "record",
         entityId: created.id,
         entityName: `${created.type} ${created.name}`,
         userId,
-        description: body.templateName
-          ? `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name} pelo template ${body.templateName}.`
-          : `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name}.`,
+        description,
         newData: {
           domain: domain.name,
           templateName: body.templateName,
+          projectId: data.projectId,
+          projectName: created.project?.name,
           type: created.type,
           name: created.name,
           content: created.content,
