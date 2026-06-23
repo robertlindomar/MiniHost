@@ -147,6 +147,10 @@ export function getEntityFilterCategory(item: HistoryItem): AuditEntityFilter {
     return "cloudflare";
   }
 
+  if (action.includes("POSTGRES")) {
+    return "settings";
+  }
+
   if (item.entityType === "domain") {
     return "domain";
   }

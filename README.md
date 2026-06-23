@@ -4,6 +4,57 @@ MiniHost é um painel web simples para organizar domínios, subdomínios e regis
 
 O objetivo futuro do projeto é evoluir para uma plataforma de gestão e automação usando PostgreSQL, Cloudflare, Coolify e deploys em VPS.
 
+## Etapa 11 implementada
+
+- Model `PostgresAdminCredential` no Prisma com credencial administrativa criptografada.
+- Novos status em `ProjectDatabase`: `PROVISIONING` e `FAILED`, com `provisionedAt`, `provisionedBy` e `lastProvisionError`.
+- Seção **Credencial administrativa PostgreSQL** em Configurações (host, porta, database de manutenção, usuário, senha, SSL).
+- Teste de conexão admin via `POST /api/settings/postgres/test`.
+- Serviço `lib/server/postgres-provisioner.ts` com criação real de usuário e banco via biblioteca `pg`.
+- Botão **Criar banco real** na tela do banco planejado, com modal de confirmação forte (`criar banco nome_db`).
+- Rota `POST /api/projects/databases/provision` para provisionamento protegido.
+- Validação de identificadores PostgreSQL antes de montar SQL.
+- Senhas nunca expostas no frontend após salvar e nunca registradas no AuditLog.
+- Histórico: `POSTGRES_ADMIN_CREDENTIAL_SAVED`, `POSTGRES_ADMIN_CREDENTIAL_REMOVED`, `POSTGRES_ADMIN_TEST_SUCCESS`, `POSTGRES_ADMIN_TEST_FAILED`, `PROJECT_DATABASE_PROVISION_START`, `PROJECT_DATABASE_PROVISION_SUCCESS`, `PROJECT_DATABASE_PROVISION_FAILED`.
+- Dashboard atualizado com bancos com erro e projetos sem banco ativo.
+- Mantidos geradores de `.env` e SQL manual.
+
+**Importante:** esta etapa **não integra com Coolify** e **não automatiza deploy**. O foco é criar bancos PostgreSQL reais com segurança a partir dos bancos planejados.
+
+### Configurar credencial administrativa PostgreSQL
+
+1. Acesse **Configurações** → **Credencial administrativa PostgreSQL**.
+2. Informe host, porta, database de manutenção (ex.: `postgres`), usuário admin e senha.
+3. Ative SSL se necessário.
+4. Clique em **Salvar credencial** (a senha não será exibida novamente).
+5. Clique em **Testar conexão** para validar.
+
+### Permissões necessárias no PostgreSQL
+
+O usuário administrativo precisa de permissões para criar roles e databases, por exemplo:
+
+```sql
+ALTER USER seu_admin WITH CREATEROLE CREATEDB;
+```
+
+Ou use um superusuário dedicado apenas em ambientes confiáveis.
+
+### Criar banco real
+
+1. Crie um banco planejado no projeto (com senha gerada ou informada).
+2. Configure e teste a credencial administrativa.
+3. Abra os detalhes do banco e clique em **Criar banco real**.
+4. Revise o preview e digite a confirmação exata (ex.: `criar banco systagio_db`).
+5. Após sucesso, o status muda para **Ativo**.
+
+**Avisos de segurança:**
+
+- Não use credencial admin em ambientes inseguros ou expostos publicamente.
+- Nunca commite arquivos `.env` com senhas ou `DATABASE_URL`.
+- O AuditLog nunca registra senhas nem URLs completas com credenciais.
+
+**Próxima etapa sugerida:** integrar o banco criado ao fluxo completo do projeto e, depois, conectar com Coolify para deploy automatizado.
+
 ## Etapa 10 implementada
 
 - Model `ProjectDatabase` no Prisma com status `PLANNED`, `CREATED_MANUALLY`, `ACTIVE`, `DISABLED` e `ARCHIVED`.

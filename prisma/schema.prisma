@@ -27,10 +27,18 @@ enum ProjectStatus {
 
 enum ProjectDatabaseStatus {
   PLANNED
-  CREATED_MANUALLY
+  PROVISIONING
   ACTIVE
+  FAILED
+  CREATED_MANUALLY
   DISABLED
   ARCHIVED
+}
+
+enum PostgresAdminCredentialStatus {
+  ACTIVE
+  INVALID
+  DISABLED
 }
 
 model User {
@@ -88,6 +96,9 @@ model ProjectDatabase {
   status                    ProjectDatabaseStatus @default(PLANNED)
   connectionUrlEncrypted    String
   notes                     String?
+  provisionedAt             DateTime?
+  provisionedBy             String?
+  lastProvisionError        String?
   createdAt                 DateTime              @default(now())
   updatedAt                 DateTime              @updatedAt
   archivedAt                DateTime?
@@ -128,6 +139,25 @@ model DnsRecord {
   @@index([source])
   @@index([status])
   @@map("dns_records")
+}
+
+model PostgresAdminCredential {
+  id                  String                        @id @default(cuid())
+  name                String                        @unique @default("default")
+  host                String
+  port                Int                           @default(5432)
+  maintenanceDatabase String                        @default("postgres")
+  username            String
+  passwordEncrypted   String
+  sslEnabled          Boolean                       @default(false)
+  status              PostgresAdminCredentialStatus @default(ACTIVE)
+  lastTestedAt        DateTime?
+  lastTestStatus      String?
+  lastTestMessage     String?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+
+  @@map("postgres_admin_credentials")
 }
 
 model CloudflareCredential {

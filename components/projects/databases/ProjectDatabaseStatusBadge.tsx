@@ -6,8 +6,10 @@ const statusConfig: Record<
   { label: string; variant: "success" | "muted" | "warning" | "danger" | "info" }
 > = {
   PLANNED: { label: "Planejado", variant: "info" },
-  CREATED_MANUALLY: { label: "Criado manualmente", variant: "warning" },
+  PROVISIONING: { label: "Provisionando", variant: "warning" },
   ACTIVE: { label: "Ativo", variant: "success" },
+  FAILED: { label: "Erro", variant: "danger" },
+  CREATED_MANUALLY: { label: "Criado manualmente", variant: "warning" },
   DISABLED: { label: "Desabilitado", variant: "muted" },
   ARCHIVED: { label: "Arquivado", variant: "danger" }
 };

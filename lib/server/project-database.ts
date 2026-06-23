@@ -59,9 +59,17 @@ export function buildManualSql(user: string, password: string, database: string)
   const escapedPassword = password.replace(/'/g, "''");
 
   return `-- Revise antes de executar em produção.
-CREATE USER ${user} WITH PASSWORD '${escapedPassword}';
+CREATE ROLE ${user}
+WITH LOGIN PASSWORD '${escapedPassword}'
+NOSUPERUSER
+NOCREATEDB
+NOCREATEROLE
+NOREPLICATION;
+
 CREATE DATABASE ${database} OWNER ${user};
-GRANT ALL PRIVILEGES ON DATABASE ${database} TO ${user};`;
+
+REVOKE CONNECT ON DATABASE ${database} FROM PUBLIC;
+GRANT CONNECT ON DATABASE ${database} TO ${user};`;
 }
 
 export function encryptDatabasePassword(password: string) {

@@ -6,13 +6,18 @@ import { ArchiveProjectDatabaseDialog } from "@/components/projects/databases/Ar
 import { ProjectDatabaseDetailModal } from "@/components/projects/databases/ProjectDatabaseDetailModal";
 import { ProjectDatabaseForm } from "@/components/projects/databases/ProjectDatabaseForm";
 import { ProjectDatabaseTable } from "@/components/projects/databases/ProjectDatabaseTable";
+import { FixPermissionsModal } from "@/components/projects/databases/FixPermissionsModal";
+import { ProvisionDatabaseModal } from "@/components/projects/databases/ProvisionDatabaseModal";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Toast } from "@/components/ui/Toast";
 import { apiRequest } from "@/lib/api-client";
 import type {
+  PostgresAdminStatus,
   Project,
   ProjectDatabase,
   ProjectDatabaseFormInput,
+  ProjectDatabasePermissionVerification,
   ProjectDatabaseSuggestions
 } from "@/lib/types";
 
@@ -26,6 +31,9 @@ type SuggestionsResponse = { suggestions: ProjectDatabaseSuggestions };
 type CreateDatabaseResponse = { database: ProjectDatabase; generatedPassword?: string };
 type GenerateContentResponse = { envContent?: string; sqlContent?: string; warning: string };
 type RotatePasswordResponse = { database: ProjectDatabase; generatedPassword: string };
+type ProvisionResponse = { message: string; database: ProjectDatabase };
+type PermissionResponse = { message: string; verification: ProjectDatabasePermissionVerification };
+type SettingsStatusResponse = { postgresAdmin?: PostgresAdminStatus };
 
 export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabasesSectionProps) {
   const [databases, setDatabases] = useState<ProjectDatabase[]>([]);
@@ -41,6 +49,11 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
   const [sqlContent, setSqlContent] = useState<string | undefined>();
   const [contentWarning, setContentWarning] = useState<string | undefined>();
   const [pendingSensitiveAction, setPendingSensitiveAction] = useState<"env" | "sql" | null>(null);
+  const [isProvisionModalOpen, setIsProvisionModalOpen] = useState(false);
+  const [isFixPermissionsModalOpen, setIsFixPermissionsModalOpen] = useState(false);
+  const [permissionVerification, setPermissionVerification] = useState<ProjectDatabasePermissionVerification | undefined>();
+  const [hasAdminCredential, setHasAdminCredential] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const isArchivedProject = project.status === "ARCHIVED";
 
@@ -59,8 +72,18 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
     setSuggestions(data.suggestions);
   }
 
+  async function loadAdminStatus() {
+    try {
+      const data = await apiRequest<SettingsStatusResponse>("/api/settings");
+      setHasAdminCredential(Boolean(data.postgresAdmin?.hasCredential));
+    } catch {
+      setHasAdminCredential(false);
+    }
+  }
+
   useEffect(() => {
     void reload();
+    void loadAdminStatus();
   }, [project.id]);
 
   function openCreateModal() {
@@ -188,6 +211,7 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
     setEnvContent(undefined);
     setSqlContent(undefined);
     setContentWarning(undefined);
+    setPermissionVerification(undefined);
   }
 
   function closeDetail() {
@@ -196,6 +220,90 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
     setEnvContent(undefined);
     setSqlContent(undefined);
     setContentWarning(undefined);
+    setPermissionVerification(undefined);
+    setIsProvisionModalOpen(false);
+    setIsFixPermissionsModalOpen(false);
+  }
+
+  async function handleProvision(confirmationText: string) {
+    if (!selectedDatabase) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<ProvisionResponse>("/api/projects/databases/provision", {
+        method: "POST",
+        body: JSON.stringify({
+          projectDatabaseId: selectedDatabase.id,
+          confirmationText
+        })
+      });
+
+      setSelectedDatabase(data.database);
+      setIsProvisionModalOpen(false);
+      setToast({ type: "success", message: data.message });
+      await reload();
+      onChanged?.();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível provisionar o banco."
+      });
+      await reload();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleVerifyPermissions() {
+    if (!selectedDatabase) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<PermissionResponse>(
+        `/api/projects/${project.id}/databases/${selectedDatabase.id}/verify-permissions`,
+        { method: "POST" }
+      );
+      setPermissionVerification(data.verification);
+      setToast({ type: data.verification.ok ? "success" : "error", message: data.message });
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível verificar permissões."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleFixPermissions(confirmationText: string) {
+    if (!selectedDatabase) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<PermissionResponse>(
+        `/api/projects/${project.id}/databases/${selectedDatabase.id}/fix-permissions`,
+        {
+          method: "POST",
+          body: JSON.stringify({ confirmationText })
+        }
+      );
+      setPermissionVerification(data.verification);
+      setIsFixPermissionsModalOpen(false);
+      setToast({ type: data.verification.ok ? "success" : "error", message: data.message });
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível corrigir permissões."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -264,8 +372,10 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
 
       <ProjectDatabaseDetailModal
         database={selectedDatabase}
-        isOpen={Boolean(selectedDatabase) && !pendingSensitiveAction}
+        isOpen={Boolean(selectedDatabase) && !pendingSensitiveAction && !isProvisionModalOpen && !isFixPermissionsModalOpen}
         isSubmitting={isSubmitting}
+        hasAdminCredential={hasAdminCredential}
+        permissionVerification={permissionVerification}
         envContent={envContent}
         sqlContent={sqlContent}
         generatedPassword={generatedPassword}
@@ -274,6 +384,26 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
         onGenerateEnv={() => setPendingSensitiveAction("env")}
         onGenerateSql={() => setPendingSensitiveAction("sql")}
         onRotatePassword={() => selectedDatabase && void handleRotatePassword(selectedDatabase)}
+        onProvision={() => setIsProvisionModalOpen(true)}
+        onVerifyPermissions={() => void handleVerifyPermissions()}
+        onFixPermissions={() => setIsFixPermissionsModalOpen(true)}
+      />
+
+      <ProvisionDatabaseModal
+        database={selectedDatabase}
+        project={project}
+        isOpen={isProvisionModalOpen && Boolean(selectedDatabase)}
+        isSubmitting={isSubmitting}
+        onClose={() => setIsProvisionModalOpen(false)}
+        onConfirm={(confirmationText) => void handleProvision(confirmationText)}
+      />
+
+      <FixPermissionsModal
+        database={selectedDatabase}
+        isOpen={isFixPermissionsModalOpen && Boolean(selectedDatabase)}
+        isSubmitting={isSubmitting}
+        onClose={() => setIsFixPermissionsModalOpen(false)}
+        onConfirm={(confirmationText) => void handleFixPermissions(confirmationText)}
       />
 
       <ConfirmDialog
@@ -298,6 +428,8 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
         onCancel={() => (isSubmitting ? undefined : setDatabaseToArchive(undefined))}
         onConfirm={() => void confirmArchive()}
       />
+
+      {toast ? <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} /> : null}
     </section>
   );
 }

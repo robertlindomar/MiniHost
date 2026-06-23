@@ -1,6 +1,6 @@
 "use client";
 
-import { Cloud, Globe2, Loader2, Server, ShieldCheck } from "lucide-react";
+import { Cloud, Database, Globe2, Loader2, Server, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AlertBox } from "@/components/settings/AlertBox";
 import { FormField, settingsFieldClass, settingsFieldErrorClass } from "@/components/settings/FormField";
@@ -9,6 +9,7 @@ import { SecretInput } from "@/components/settings/SecretInput";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsLoadingState } from "@/components/settings/SettingsLoadingState";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { PostgresAdminStatusBadge } from "@/components/settings/PostgresAdminStatusBadge";
 import { SettingsStatusBadge } from "@/components/settings/SettingsStatusBadge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Toast } from "@/components/ui/Toast";
@@ -16,17 +17,23 @@ import { FieldInfoTooltip } from "@/components/ui/FieldInfoTooltip";
 import { pageContainerNarrowClass } from "@/components/layout/page-container";
 import { apiRequest } from "@/lib/api-client";
 import { MASKED_SECRET_VALUE, validateSettingsInput, type SettingsFieldErrors } from "@/lib/settings";
-import type { CloudflareStatus, Domain, MiniHostSettings } from "@/lib/types";
+import type { CloudflareStatus, Domain, MiniHostSettings, PostgresAdminStatus } from "@/lib/types";
 
 type ToastState = { type: "success" | "error" | "info"; message: string } | null;
 
 type SettingsResponse = {
   settings: MiniHostSettings;
   cloudflare: CloudflareStatus;
+  postgresAdmin?: PostgresAdminStatus;
 };
 
 type TokenMutationResponse = SettingsResponse & {
   message: string;
+};
+
+type PostgresCredentialMutationResponse = {
+  message: string;
+  postgresAdmin: PostgresAdminStatus;
 };
 
 type DomainsResponse = { domains: Domain[] };
@@ -48,19 +55,38 @@ const defaultCloudflareStatus: CloudflareStatus = {
   connectionStatus: "not_configured"
 };
 
+const defaultPostgresAdminStatus: PostgresAdminStatus = {
+  hasCredential: false,
+  connectionStatus: "not_configured"
+};
+
 export function SettingsPage() {
   const [settings, setSettings] = useState<MiniHostSettings>(defaultSettings);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [cloudflare, setCloudflare] = useState<CloudflareStatus>(defaultCloudflareStatus);
+  const [postgresAdmin, setPostgresAdmin] = useState<PostgresAdminStatus>(defaultPostgresAdminStatus);
   const [tokenDraft, setTokenDraft] = useState("");
+  const [postgresCredentialDraft, setPostgresCredentialDraft] = useState({
+    host: "",
+    port: 5432,
+    maintenanceDatabase: "postgres",
+    username: "",
+    password: "",
+    sslEnabled: false
+  });
   const [isReplacingToken, setIsReplacingToken] = useState(false);
+  const [isReplacingPostgresPassword, setIsReplacingPostgresPassword] = useState(false);
   const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
+  const [isRemovePostgresDialogOpen, setIsRemovePostgresDialogOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<SettingsFieldErrors>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingToken, setIsSavingToken] = useState(false);
+  const [isSavingPostgresCredential, setIsSavingPostgresCredential] = useState(false);
   const [isRemovingToken, setIsRemovingToken] = useState(false);
+  const [isRemovingPostgresCredential, setIsRemovingPostgresCredential] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isTestingPostgresConnection, setIsTestingPostgresConnection] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [failedToLoad, setFailedToLoad] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
@@ -76,6 +102,16 @@ export function SettingsPage() {
       setSettings(settingsData.settings);
       setDomains(domainsData.domains);
       setCloudflare(settingsData.cloudflare ?? defaultCloudflareStatus);
+      setPostgresAdmin(settingsData.postgresAdmin ?? defaultPostgresAdminStatus);
+      setPostgresCredentialDraft({
+        host: settingsData.postgresAdmin?.host ?? settingsData.settings.defaultPostgresHost ?? "",
+        port: settingsData.postgresAdmin?.port ?? Number(settingsData.settings.defaultPostgresPort || 5432),
+        maintenanceDatabase: settingsData.postgresAdmin?.maintenanceDatabase ?? "postgres",
+        username: settingsData.postgresAdmin?.username ?? "",
+        password: "",
+        sslEnabled: settingsData.postgresAdmin?.sslEnabled ?? false
+      });
+      setIsReplacingPostgresPassword(false);
       setTokenDraft("");
       setIsReplacingToken(false);
       setFieldErrors({});
@@ -111,7 +147,9 @@ export function SettingsPage() {
 
   const hasDomains = domains.length > 0;
   const hasStoredToken = cloudflare.hasToken;
+  const hasStoredPostgresCredential = postgresAdmin.hasCredential;
   const showTokenInput = !hasStoredToken || isReplacingToken;
+  const showPostgresPasswordInput = !hasStoredPostgresCredential || isReplacingPostgresPassword;
 
   function updateField<Key extends keyof MiniHostSettings>(key: Key, value: MiniHostSettings[Key]) {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -242,6 +280,100 @@ export function SettingsPage() {
       setToast({ type: "error", message });
     } finally {
       setIsTestingConnection(false);
+    }
+  }
+
+  async function handleTestPostgresConnection() {
+    try {
+      setIsTestingPostgresConnection(true);
+      const data = await apiRequest<TestConnectionResponse>("/api/settings/postgres/test", {
+        method: "POST"
+      });
+      setPostgresAdmin((current) => ({
+        ...current,
+        connectionStatus: "connected",
+        lastTestMessage: data.message,
+        lastTestedAt: new Date().toISOString()
+      }));
+      setToast({ type: "success", message: data.message });
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : "Não foi possível conectar ao PostgreSQL. Verifique host, porta, usuário e senha.";
+      setPostgresAdmin((current) => ({
+        ...current,
+        connectionStatus: "error",
+        lastTestMessage: message,
+        lastTestedAt: new Date().toISOString()
+      }));
+      setToast({ type: "error", message });
+    } finally {
+      setIsTestingPostgresConnection(false);
+    }
+  }
+
+  async function handleSavePostgresCredential() {
+    if (!postgresCredentialDraft.host.trim()) {
+      setToast({ type: "error", message: "Informe o host PostgreSQL." });
+      return;
+    }
+
+    if (!postgresCredentialDraft.username.trim()) {
+      setToast({ type: "error", message: "Informe o usuário administrativo." });
+      return;
+    }
+
+    if (!hasStoredPostgresCredential && !postgresCredentialDraft.password.trim()) {
+      setToast({ type: "error", message: "Informe a senha administrativa." });
+      return;
+    }
+
+    if (isReplacingPostgresPassword && !postgresCredentialDraft.password.trim()) {
+      setToast({ type: "error", message: "Informe a nova senha administrativa." });
+      return;
+    }
+
+    try {
+      setIsSavingPostgresCredential(true);
+      const data = await apiRequest<PostgresCredentialMutationResponse>("/api/settings/postgres-credential", {
+        method: "POST",
+        body: JSON.stringify(postgresCredentialDraft)
+      });
+
+      setPostgresAdmin(data.postgresAdmin);
+      setPostgresCredentialDraft((current) => ({ ...current, password: "" }));
+      setIsReplacingPostgresPassword(false);
+      setToast({ type: "success", message: data.message });
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível salvar a credencial."
+      });
+    } finally {
+      setIsSavingPostgresCredential(false);
+    }
+  }
+
+  async function handleRemovePostgresCredential() {
+    try {
+      setIsRemovingPostgresCredential(true);
+      const data = await apiRequest<PostgresCredentialMutationResponse>("/api/settings/postgres-credential", {
+        method: "DELETE"
+      });
+
+      setPostgresAdmin(data.postgresAdmin);
+      setPostgresCredentialDraft((current) => ({ ...current, password: "" }));
+      setIsReplacingPostgresPassword(false);
+      setIsRemovePostgresDialogOpen(false);
+      setToast({ type: "success", message: data.message });
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível remover a credencial."
+      });
+    } finally {
+      setIsRemovingPostgresCredential(false);
     }
   }
 
@@ -482,6 +614,186 @@ export function SettingsPage() {
           </SettingsCard>
 
           <SettingsCard
+            title="Credencial administrativa PostgreSQL"
+            description="Usuário com permissão para criar bancos e roles no servidor PostgreSQL."
+            icon={<Database className="h-5 w-5 text-violet-600" />}
+            badge={<PostgresAdminStatusBadge status={postgresAdmin.connectionStatus} />}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField id="postgres-admin-host" label="Host" info="Servidor PostgreSQL onde os bancos serão criados.">
+                <input
+                  id="postgres-admin-host"
+                  value={postgresCredentialDraft.host}
+                  disabled={isSavingPostgresCredential || isRemovingPostgresCredential}
+                  onChange={(event) =>
+                    setPostgresCredentialDraft((current) => ({ ...current, host: event.target.value }))
+                  }
+                  className={settingsFieldClass}
+                  placeholder="postgres.exemplo.com"
+                />
+              </FormField>
+              <FormField id="postgres-admin-port" label="Porta">
+                <input
+                  id="postgres-admin-port"
+                  type="number"
+                  value={postgresCredentialDraft.port}
+                  disabled={isSavingPostgresCredential || isRemovingPostgresCredential}
+                  onChange={(event) =>
+                    setPostgresCredentialDraft((current) => ({
+                      ...current,
+                      port: Number(event.target.value) || 5432
+                    }))
+                  }
+                  className={settingsFieldClass}
+                  placeholder="5432"
+                />
+              </FormField>
+              <FormField
+                id="postgres-admin-maintenance-db"
+                label="Database de manutenção"
+                info="Database usado para conectar antes de criar novos bancos, ex.: postgres."
+              >
+                <input
+                  id="postgres-admin-maintenance-db"
+                  value={postgresCredentialDraft.maintenanceDatabase}
+                  disabled={isSavingPostgresCredential || isRemovingPostgresCredential}
+                  onChange={(event) =>
+                    setPostgresCredentialDraft((current) => ({
+                      ...current,
+                      maintenanceDatabase: event.target.value
+                    }))
+                  }
+                  className={settingsFieldClass}
+                  placeholder="postgres"
+                />
+              </FormField>
+              <FormField id="postgres-admin-username" label="Usuário admin/provisionador">
+                <input
+                  id="postgres-admin-username"
+                  value={postgresCredentialDraft.username}
+                  disabled={isSavingPostgresCredential || isRemovingPostgresCredential}
+                  onChange={(event) =>
+                    setPostgresCredentialDraft((current) => ({ ...current, username: event.target.value }))
+                  }
+                  className={settingsFieldClass}
+                  placeholder="postgres_admin"
+                />
+              </FormField>
+            </div>
+
+            <FormField
+              id="postgres-admin-password"
+              label="Senha"
+              info="Salva criptografada. Não será exibida novamente após salvar."
+            >
+              {showPostgresPasswordInput ? (
+                <SecretInput
+                  id="postgres-admin-password"
+                  value={postgresCredentialDraft.password}
+                  onChange={(value) => setPostgresCredentialDraft((current) => ({ ...current, password: value }))}
+                  disabled={isSavingPostgresCredential || isRemovingPostgresCredential}
+                  hasStoredValue={false}
+                  placeholder="Senha do usuário administrativo"
+                />
+              ) : (
+                <input
+                  id="postgres-admin-password"
+                  type="password"
+                  value={MASKED_SECRET_VALUE}
+                  readOnly
+                  disabled
+                  className={`${settingsFieldClass} bg-zinc-50 text-zinc-500`}
+                />
+              )}
+            </FormField>
+
+            <label className="flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-4">
+              <input
+                id="postgres-admin-ssl"
+                type="checkbox"
+                checked={postgresCredentialDraft.sslEnabled}
+                disabled={isSavingPostgresCredential || isRemovingPostgresCredential}
+                onChange={(event) =>
+                  setPostgresCredentialDraft((current) => ({ ...current, sslEnabled: event.target.checked }))
+                }
+                className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-500"
+              />
+              <span className="text-sm font-medium text-zinc-900">SSL ativado</span>
+            </label>
+
+            {postgresAdmin.lastTestedAt ? (
+              <AlertBox
+                type={postgresAdmin.connectionStatus === "error" ? "warning" : "info"}
+                message={
+                  postgresAdmin.lastTestMessage
+                    ? `Último teste (${new Date(postgresAdmin.lastTestedAt).toLocaleString("pt-BR")}): ${postgresAdmin.lastTestMessage}`
+                    : `Último teste em ${new Date(postgresAdmin.lastTestedAt).toLocaleString("pt-BR")}.`
+                }
+              />
+            ) : null}
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <button
+                type="button"
+                onClick={() => void handleSavePostgresCredential()}
+                disabled={isSavingPostgresCredential || isRemovingPostgresCredential}
+                className="inline-flex items-center justify-center rounded-md bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingPostgresCredential ? "Salvando..." : "Salvar credencial"}
+              </button>
+
+              {hasStoredPostgresCredential && !showPostgresPasswordInput ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReplacingPostgresPassword(true);
+                    setPostgresCredentialDraft((current) => ({ ...current, password: "" }));
+                  }}
+                  disabled={isSavingPostgresCredential || isRemovingPostgresCredential}
+                  className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Trocar senha
+                </button>
+              ) : null}
+
+              {hasStoredPostgresCredential ? (
+                <button
+                  type="button"
+                  onClick={() => setIsRemovePostgresDialogOpen(true)}
+                  disabled={isSavingPostgresCredential || isRemovingPostgresCredential}
+                  className="inline-flex items-center justify-center rounded-md border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Remover credencial
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => void handleTestPostgresConnection()}
+                disabled={
+                  isSavingPostgresCredential ||
+                  isRemovingPostgresCredential ||
+                  isTestingPostgresConnection ||
+                  !hasStoredPostgresCredential
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isTestingPostgresConnection ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Database className="h-4 w-4" />
+                )}
+                {isTestingPostgresConnection ? "Testando conexão..." : "Testar conexão"}
+              </button>
+            </div>
+
+            <AlertBox
+              type="warning"
+              message="Use credencial administrativa apenas em ambientes confiáveis. Nunca commite arquivos .env com senhas."
+            />
+          </SettingsCard>
+
+          <SettingsCard
             title="PostgreSQL padrão"
             description="Valores sugeridos ao planejar bancos por projeto."
             icon={<Server className="h-5 w-5 text-violet-600" />}
@@ -564,6 +876,17 @@ export function SettingsPage() {
         onCancel={() => (isRemovingToken ? undefined : setIsRemoveDialogOpen(false))}
         onConfirm={() => void handleRemoveToken()}
         isConfirming={isRemovingToken}
+      />
+
+      <ConfirmDialog
+        isOpen={isRemovePostgresDialogOpen}
+        title="Remover credencial PostgreSQL"
+        message="Tem certeza que deseja remover a credencial administrativa? A criação real de bancos ficará indisponível até cadastrar uma nova credencial."
+        confirmLabel="Remover credencial"
+        confirmingLabel="Removendo..."
+        onCancel={() => (isRemovingPostgresCredential ? undefined : setIsRemovePostgresDialogOpen(false))}
+        onConfirm={() => void handleRemovePostgresCredential()}
+        isConfirming={isRemovingPostgresCredential}
       />
 
       {toast ? <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} /> : null}

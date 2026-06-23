@@ -76,6 +76,8 @@ export function toProject(project: ProjectWithCount): Project {
 
 export function toProjectDatabaseStatus(status: string): ProjectDatabaseStatus {
   if (
+    status === "PROVISIONING" ||
+    status === "FAILED" ||
     status === "CREATED_MANUALLY" ||
     status === "ACTIVE" ||
     status === "DISABLED" ||
@@ -101,7 +103,9 @@ export function toProjectDatabase(database: PrismaProjectDatabase): ProjectDatab
     createdAt: database.createdAt.toISOString(),
     updatedAt: database.updatedAt.toISOString(),
     archivedAt: database.archivedAt?.toISOString(),
-    hasPassword: Boolean(database.databasePasswordEncrypted)
+    hasPassword: Boolean(database.databasePasswordEncrypted),
+    provisionedAt: database.provisionedAt?.toISOString(),
+    lastProvisionError: database.lastProvisionError ?? undefined
   };
 }
 

@@ -2,7 +2,14 @@ export type EntityStatus = "active" | "inactive";
 
 export type ProjectStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "ARCHIVED";
 
-export type ProjectDatabaseStatus = "PLANNED" | "CREATED_MANUALLY" | "ACTIVE" | "DISABLED" | "ARCHIVED";
+export type ProjectDatabaseStatus =
+  | "PLANNED"
+  | "PROVISIONING"
+  | "ACTIVE"
+  | "FAILED"
+  | "CREATED_MANUALLY"
+  | "DISABLED"
+  | "ARCHIVED";
 
 export type DnsRecordStatus = EntityStatus | "DELETED";
 
@@ -38,6 +45,8 @@ export interface ProjectDatabase {
   updatedAt: string;
   archivedAt?: string;
   hasPassword: boolean;
+  provisionedAt?: string;
+  lastProvisionError?: string;
 }
 
 export interface ProjectDatabaseFormInput {
@@ -135,6 +144,47 @@ export interface CloudflareStatus {
   credentialStatus?: "ACTIVE" | "INVALID" | "DISABLED";
   lastTestedAt?: string;
   lastTestMessage?: string;
+}
+
+export type PostgresConnectionStatus = "connected" | "not_configured" | "error" | "not_tested";
+
+export interface PostgresAdminStatus {
+  hasCredential: boolean;
+  connectionStatus: PostgresConnectionStatus;
+  credentialStatus?: "ACTIVE" | "INVALID" | "DISABLED";
+  host?: string;
+  port?: number;
+  maintenanceDatabase?: string;
+  username?: string;
+  sslEnabled?: boolean;
+  lastTestedAt?: string;
+  lastTestMessage?: string;
+}
+
+export interface PostgresAdminCredentialFormInput {
+  host: string;
+  port: number;
+  maintenanceDatabase: string;
+  username: string;
+  password?: string;
+  sslEnabled: boolean;
+}
+
+export interface ProjectDatabasePermissionDetail {
+  databaseName: string;
+  canConnect: boolean;
+  isProjectDatabase: boolean;
+  publicCanConnect: boolean;
+}
+
+export interface ProjectDatabasePermissionVerification {
+  ok: boolean;
+  projectDatabaseName: string;
+  projectUser: string;
+  connectableDatabases: string[];
+  unexpectedDatabases: string[];
+  publicConnectWarnings: string[];
+  details: ProjectDatabasePermissionDetail[];
 }
 
 export interface DomainFormInput {

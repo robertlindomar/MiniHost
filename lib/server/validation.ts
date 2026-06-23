@@ -175,7 +175,7 @@ export function validateProjectDatabaseInput(input: ProjectDatabaseFormInput) {
     errors.push("Porta deve estar entre 1 e 65535.");
   }
 
-  if (!validStatuses.includes(status)) {
+  if (!validStatuses.includes(status as (typeof validStatuses)[number])) {
     errors.push("Status do banco inválido.");
   }
 
@@ -242,7 +242,7 @@ export function validateProjectDatabaseUpdateInput(input: {
     errors.push("Porta deve estar entre 1 e 65535.");
   }
 
-  if (!input.status || !validStatuses.includes(input.status)) {
+  if (!input.status || !validStatuses.includes(input.status as (typeof validStatuses)[number])) {
     errors.push("Status do banco inválido.");
   }
 

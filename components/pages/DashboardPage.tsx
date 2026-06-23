@@ -68,14 +68,17 @@ export function DashboardPage() {
     () => databases.filter((database) => database.status === "ACTIVE"),
     [databases]
   );
-  const archivedDatabases = useMemo(
-    () => databases.filter((database) => database.status === "ARCHIVED"),
+  const failedDatabases = useMemo(
+    () => databases.filter((database) => database.status === "FAILED"),
     [databases]
   );
-  const projectsWithoutDatabase = useMemo(
-    () => projects.filter((project) => (project.databaseCount ?? 0) === 0 && project.status !== "ARCHIVED"),
-    [projects]
-  );
+  const projectsWithoutActiveDatabase = useMemo(() => {
+    const activeDbProjectIds = new Set(
+      databases.filter((database) => database.status === "ACTIVE").map((database) => database.projectId)
+    );
+
+    return projects.filter((project) => project.status !== "ARCHIVED" && !activeDbProjectIds.has(project.id));
+  }, [projects, databases]);
 
   const latestRecords = useMemo(
     () => [...records].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5),
@@ -193,17 +196,17 @@ export function DashboardPage() {
           isLoading={isLoading}
         />
         <StatCard
-          title="Bancos arquivados"
-          value={archivedDatabases.length}
-          description="Bancos arquivados sem exclusão"
+          title="Bancos com erro"
+          value={failedDatabases.length}
+          description="Bancos com falha no provisionamento"
           icon={<Server className="h-5 w-5" />}
           tone="amber"
           isLoading={isLoading}
         />
         <StatCard
-          title="Projetos sem banco"
-          value={projectsWithoutDatabase.length}
-          description="Projetos ativos sem banco configurado"
+          title="Projetos sem banco ativo"
+          value={projectsWithoutActiveDatabase.length}
+          description="Projetos sem banco PostgreSQL ativo"
           icon={<FolderKanban className="h-5 w-5" />}
           tone="violet"
           isLoading={isLoading}
