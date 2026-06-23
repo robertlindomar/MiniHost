@@ -2,6 +2,7 @@ import { listDnsRecords, CloudflareApiError, type CloudflareDnsRecord } from "@/
 import type { SessionUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/server/audit";
+import { CloudflareTokenError, getCloudflareToken } from "@/lib/server/cloudflare-credential";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toDnsRecord, toDomain } from "@/lib/server/mappers";
@@ -79,7 +80,8 @@ export async function POST(request: Request) {
       newData: toDomain(domain)
     });
 
-    const cloudflareRecords = await listDnsRecords(domain.zoneId);
+    const apiToken = await getCloudflareToken();
+    const cloudflareRecords = await listDnsRecords(domain.zoneId, apiToken);
     const syncedAt = new Date();
     let created = 0;
     let updated = 0;
@@ -162,6 +164,10 @@ export async function POST(request: Request) {
           }
         })
         .catch(() => undefined);
+    }
+
+    if (error instanceof CloudflareTokenError) {
+      return fail(error.message, 400);
     }
 
     if (error instanceof CloudflareApiError) {

@@ -39,7 +39,11 @@ interface DnsTemplate {
 }
 
 type DomainsResponse = { domains: Domain[] };
-type SettingsResponse = { settings: MiniHostSettings; cloudflareConfigured?: boolean };
+type SettingsResponse = {
+  settings: MiniHostSettings;
+  cloudflare?: { hasToken: boolean };
+  cloudflareConfigured?: boolean;
+};
 type CreateRecordResponse = { record: DnsRecord; message?: string };
 
 const templates: DnsTemplate[] = [
@@ -250,7 +254,7 @@ export function DnsTemplatesPanel({ mode = "cards" }: { mode?: "cards" | "quick"
       ]);
       setDomains(domainData.domains);
       setSettings(settingsData.settings);
-      setCloudflareConfigured(Boolean(settingsData.cloudflareConfigured));
+      setCloudflareConfigured(Boolean(settingsData.cloudflare?.hasToken ?? settingsData.cloudflareConfigured));
     } catch (requestError) {
       setNotice({
         type: "error",
@@ -359,7 +363,7 @@ export function DnsTemplatesPanel({ mode = "cards" }: { mode?: "cards" | "quick"
     }
 
     if (createInCloudflare && !cloudflareConfigured) {
-      setNotice({ type: "error", message: "Configure o token da Cloudflare no ambiente antes de criar registros reais." });
+      setNotice({ type: "error", message: "Configure o token da Cloudflare em Configurações antes de criar registros reais." });
       return;
     }
 
@@ -412,7 +416,7 @@ export function DnsTemplatesPanel({ mode = "cards" }: { mode?: "cards" | "quick"
     : undefined;
   const cloudflareDisabledReason = !canCreateInCloudflare
     ? !cloudflareConfigured
-      ? "Configure o token da Cloudflare em Configurações ou variável de ambiente."
+      ? "Configure o token da Cloudflare em Configurações."
       : selectedDomain && !selectedDomain.zoneId
         ? "Configure o Zone ID deste domínio para criar registros reais na Cloudflare."
         : localDisabledReason

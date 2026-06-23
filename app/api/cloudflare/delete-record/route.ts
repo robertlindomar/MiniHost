@@ -1,6 +1,7 @@
 import { CloudflareApiError, deleteDnsRecord } from "@/lib/cloudflare";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/server/audit";
+import { CloudflareTokenError, getCloudflareToken } from "@/lib/server/cloudflare-credential";
 import { isRecordDeleted } from "@/lib/server/dns-records";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
@@ -105,7 +106,8 @@ export async function DELETE(request: Request) {
       return fail("Texto de confirmação inválido.");
     }
 
-    await deleteDnsRecord(domain.zoneId, existing.cloudflareRecordId);
+    const apiToken = await getCloudflareToken();
+    await deleteDnsRecord(domain.zoneId, existing.cloudflareRecordId, apiToken);
     const deletedAt = new Date();
 
     const savedRecord = await prisma.$transaction(async (tx) => {
@@ -170,6 +172,10 @@ export async function DELETE(request: Request) {
           }
         })
         .catch(() => undefined);
+    }
+
+    if (error instanceof CloudflareTokenError) {
+      return fail(error.message, 400);
     }
 
     if (error instanceof CloudflareApiError) {

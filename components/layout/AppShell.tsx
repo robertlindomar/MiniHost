@@ -10,15 +10,19 @@ import { getPageMeta } from "@/components/layout/navigation";
 import { apiRequest } from "@/lib/api-client";
 import type { SessionUser } from "@/lib/auth/session";
 
+import type { CloudflareConnectionStatus } from "@/lib/types";
+
 type SettingsStatusResponse = {
-  cloudflareConfigured?: boolean;
+  cloudflare?: {
+    connectionStatus: CloudflareConnectionStatus;
+  };
 };
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const pageMeta = getPageMeta(pathname);
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [cloudflareConfigured, setCloudflareConfigured] = useState(false);
+  const [cloudflareStatus, setCloudflareStatus] = useState<CloudflareConnectionStatus>("not_configured");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
@@ -39,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         ]);
 
         setUser(userData.user);
-        setCloudflareConfigured(Boolean(settingsData.cloudflareConfigured));
+        setCloudflareStatus(settingsData.cloudflare?.connectionStatus ?? "not_configured");
       } catch {
         setUser(null);
         await apiRequest<{ ok: boolean }>("/api/auth/logout", { method: "POST" }).catch(() => undefined);
@@ -74,7 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Sidebar
             pathname={pathname}
             accountName={accountName}
-            cloudflareConfigured={cloudflareConfigured}
+            cloudflareStatus={cloudflareStatus}
           />
         </aside>
 
@@ -82,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           isOpen={isMobileNavOpen}
           pathname={pathname}
           accountName={accountName}
-          cloudflareConfigured={cloudflareConfigured}
+          cloudflareStatus={cloudflareStatus}
           onClose={() => setIsMobileNavOpen(false)}
         />
 

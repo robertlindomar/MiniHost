@@ -2,9 +2,14 @@ import { listDnsRecords, CloudflareApiError } from "@/lib/cloudflare";
 import { prisma } from "@/lib/prisma";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
+import {
+  CloudflareTokenError,
+  getCloudflareToken,
+  hasCloudflareToken,
+  recordCloudflareTestResult
+} from "@/lib/server/cloudflare-credential";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { defaultSettings, toSettings } from "@/lib/server/mappers";
-import { isCloudflareConfigured } from "@/lib/server/settings";
 import { isPlausibleZoneId } from "@/lib/validation";
 
 type TestConnectionBody = {
@@ -19,12 +24,12 @@ export async function POST(request: Request) {
     const settings = rows.length > 0 ? toSettings(rows) : defaultSettings;
     const zoneId = String(body.zoneId ?? settings.defaultZoneId ?? "").trim();
 
-    if (!isCloudflareConfigured(settings)) {
-      return fail("Token da Cloudflare não configurado.", 400);
+    if (!(await hasCloudflareToken())) {
+      return fail("Configure o token da Cloudflare antes de testar a conexão.", 400);
     }
 
     if (!zoneId) {
-      return fail("Informe o Zone ID padrão para testar a conexão.", 400);
+      return fail("Configure o Zone ID padrão antes de testar a conexão.", 400);
     }
 
     if (!isPlausibleZoneId(zoneId)) {
@@ -32,26 +37,32 @@ export async function POST(request: Request) {
     }
 
     try {
-      await listDnsRecords(zoneId);
+      const token = await getCloudflareToken();
+      await listDnsRecords(zoneId, token);
+      const message = "Conexão com Cloudflare testada com sucesso.";
+
+      await recordCloudflareTestResult("success", message, prisma);
 
       await writeAudit(prisma, {
-        action: "CLOUDFLARE_CONNECTION_TEST",
+        action: "CLOUDFLARE_TOKEN_TEST_SUCCESS",
         entityType: "settings",
         userId: user.id,
         entityName: "Cloudflare",
-        description: "Conexão com Cloudflare validada com sucesso.",
+        description: message,
         newData: { zoneId, result: "success" }
       });
 
-      return ok({ message: "Conexão com Cloudflare validada com sucesso." });
+      return ok({ message });
     } catch (error) {
       const message =
         error instanceof CloudflareApiError
           ? error.message
-          : "Não foi possível validar a conexão com Cloudflare.";
+          : "Não foi possível conectar à Cloudflare. Verifique o token e o Zone ID.";
+
+      await recordCloudflareTestResult("failed", message, prisma);
 
       await writeAudit(prisma, {
-        action: "CLOUDFLARE_CONNECTION_TEST_FAILED",
+        action: "CLOUDFLARE_TOKEN_TEST_FAILED",
         entityType: "settings",
         userId: user.id,
         entityName: "Cloudflare",
@@ -62,6 +73,10 @@ export async function POST(request: Request) {
       return fail(message, 400);
     }
   } catch (error) {
+    if (error instanceof CloudflareTokenError) {
+      return fail(error.message, 400);
+    }
+
     return handleRouteError(error);
   }
 }

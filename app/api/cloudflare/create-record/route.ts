@@ -1,6 +1,7 @@
 import { CloudflareApiError, createDnsRecord, listDnsRecords } from "@/lib/cloudflare";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/server/audit";
+import { CloudflareTokenError, getCloudflareToken } from "@/lib/server/cloudflare-credential";
 import { findDnsRecordConflict, toCloudflareRecordName, toComparableRecordName } from "@/lib/server/dns-records";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
@@ -76,7 +77,8 @@ export async function POST(request: Request) {
       return fail(localConflict);
     }
 
-    const cloudflareRecords = await listDnsRecords(domain.zoneId);
+    const apiToken = await getCloudflareToken();
+    const cloudflareRecords = await listDnsRecords(domain.zoneId, apiToken);
     const cloudflareConflict = findDnsRecordConflict(cloudflareRecords, data, domain.name);
 
     if (cloudflareConflict) {
@@ -92,7 +94,7 @@ export async function POST(request: Request) {
       proxied: shouldSendProxied(data.type) ? data.proxied : false,
       priority: data.type === "MX" && data.priority !== null ? data.priority : undefined,
       comment: data.comment
-    });
+    }, apiToken);
     const syncedAt = new Date();
 
     const savedRecord = await prisma.$transaction(async (tx) => {
@@ -171,6 +173,10 @@ export async function POST(request: Request) {
           }
         })
         .catch(() => undefined);
+    }
+
+    if (error instanceof CloudflareTokenError) {
+      return fail(error.message, 400);
     }
 
     if (error instanceof CloudflareApiError) {

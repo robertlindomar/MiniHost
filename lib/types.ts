@@ -53,11 +53,20 @@ export interface HistoryItem {
 }
 
 export interface MiniHostSettings {
-  cloudflareApiToken: string;
   defaultZoneId: string;
   defaultDomain: string;
   defaultVpsIp: string;
   defaultProxyEnabled: boolean;
+}
+
+export type CloudflareConnectionStatus = "connected" | "not_configured" | "error" | "not_tested";
+
+export interface CloudflareStatus {
+  hasToken: boolean;
+  connectionStatus: CloudflareConnectionStatus;
+  credentialStatus?: "ACTIVE" | "INVALID" | "DISABLED";
+  lastTestedAt?: string;
+  lastTestMessage?: string;
 }
 
 export interface DomainFormInput {

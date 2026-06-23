@@ -14,7 +14,6 @@ type AuditLogWithUser = AuditLog & {
 };
 
 export const defaultSettings: MiniHostSettings = {
-  cloudflareApiToken: "",
   defaultZoneId: "",
   defaultDomain: "",
   defaultVpsIp: "",
@@ -88,7 +87,6 @@ export function toSettings(rows: AppSetting[]): MiniHostSettings {
   const values = new Map(rows.map((row) => [row.key, row.value]));
 
   return {
-    cloudflareApiToken: values.get("cloudflareApiToken") ?? defaultSettings.cloudflareApiToken,
     defaultZoneId: values.get("defaultZoneId") ?? defaultSettings.defaultZoneId,
     defaultDomain: values.get("defaultDomain") ?? defaultSettings.defaultDomain,
     defaultVpsIp: values.get("defaultVpsIp") ?? defaultSettings.defaultVpsIp,
@@ -98,7 +96,6 @@ export function toSettings(rows: AppSetting[]): MiniHostSettings {
 
 export function settingsEntries(settings: MiniHostSettings) {
   return [
-    ["cloudflareApiToken", settings.cloudflareApiToken],
     ["defaultZoneId", settings.defaultZoneId],
     ["defaultDomain", settings.defaultDomain],
     ["defaultVpsIp", settings.defaultVpsIp],

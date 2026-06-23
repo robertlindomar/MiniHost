@@ -4,14 +4,16 @@ import { CloudflareStatusBadge } from "@/components/layout/CloudflareStatusBadge
 import { SidebarItem } from "@/components/layout/SidebarItem";
 import { APP_VERSION, navigation } from "@/components/layout/navigation";
 
+import type { CloudflareConnectionStatus } from "@/lib/types";
+
 interface SidebarProps {
   pathname: string;
   accountName: string;
-  cloudflareConfigured: boolean;
+  cloudflareStatus: CloudflareConnectionStatus;
   onNavigate?: () => void;
 }
 
-export function Sidebar({ pathname, accountName, cloudflareConfigured, onNavigate }: SidebarProps) {
+export function Sidebar({ pathname, accountName, cloudflareStatus, onNavigate }: SidebarProps) {
   return (
     <div className="flex h-full flex-col bg-[#0f172a] text-white">
       <div className="border-b border-white/10 px-5 py-5">
@@ -41,7 +43,7 @@ export function Sidebar({ pathname, accountName, cloudflareConfigured, onNavigat
 
       <div className="border-t border-white/10 px-4 py-4">
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <CloudflareStatusBadge configured={cloudflareConfigured} />
+          <CloudflareStatusBadge status={cloudflareStatus} />
           <p className="mt-3 text-xs text-slate-400">Conta: {accountName}</p>
           <Link
             href="/settings"

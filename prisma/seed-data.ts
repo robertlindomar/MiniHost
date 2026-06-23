@@ -38,7 +38,6 @@ export async function seedInitialData(prisma: PrismaClient) {
 
   await prisma.appSetting.createMany({
     data: [
-      { key: "cloudflareApiToken", value: "" },
       { key: "defaultZoneId", value: "fake-zone-robertlindomar" },
       { key: "defaultDomain", value: "robertlindomar.dev" },
       { key: "defaultVpsIp", value: "147.15.126.225" },

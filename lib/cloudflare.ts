@@ -59,11 +59,11 @@ export class CloudflareApiError extends Error {
   }
 }
 
-function getApiToken() {
-  const token = process.env.CLOUDFLARE_API_TOKEN;
+function assertApiToken(apiToken: string) {
+  const token = apiToken.trim();
 
   if (!token) {
-    throw new CloudflareApiError("Token da Cloudflare ausente.");
+    throw new CloudflareApiError("Token da Cloudflare não configurado. Vá em Configurações para adicionar.");
   }
 
   return token;
@@ -91,8 +91,8 @@ function getErrorMessage(status: number, payload?: { errors?: Array<{ code: numb
   return cloudflareMessage || "Resposta inesperada da Cloudflare.";
 }
 
-export async function listDnsRecords(zoneId: string) {
-  const token = getApiToken();
+export async function listDnsRecords(zoneId: string, apiToken: string) {
+  const token = assertApiToken(apiToken);
   const records: CloudflareDnsRecord[] = [];
   let page = 1;
   let totalPages = 1;
@@ -134,8 +134,8 @@ export async function listDnsRecords(zoneId: string) {
   return records;
 }
 
-export async function createDnsRecord(zoneId: string, payload: CloudflareCreateDnsRecordPayload) {
-  const token = getApiToken();
+export async function createDnsRecord(zoneId: string, payload: CloudflareCreateDnsRecordPayload, apiToken: string) {
+  const token = assertApiToken(apiToken);
   const url = new URL(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`);
 
   let response: Response;
@@ -167,8 +167,13 @@ export async function createDnsRecord(zoneId: string, payload: CloudflareCreateD
   return responsePayload.result;
 }
 
-export async function updateDnsRecord(zoneId: string, recordId: string, payload: CloudflareUpdateDnsRecordPayload) {
-  const token = getApiToken();
+export async function updateDnsRecord(
+  zoneId: string,
+  recordId: string,
+  payload: CloudflareUpdateDnsRecordPayload,
+  apiToken: string
+) {
+  const token = assertApiToken(apiToken);
   const url = new URL(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${recordId}`);
 
   let response: Response;
@@ -206,8 +211,8 @@ interface CloudflareDeleteResponse {
   result?: { id: string };
 }
 
-export async function deleteDnsRecord(zoneId: string, recordId: string) {
-  const token = getApiToken();
+export async function deleteDnsRecord(zoneId: string, recordId: string, apiToken: string) {
+  const token = assertApiToken(apiToken);
   const url = new URL(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${recordId}`);
 
   let response: Response;

@@ -1,23 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
+import { getCloudflareClientStatus } from "@/lib/server/cloudflare-credential";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { defaultSettings, settingsEntries, toSettings } from "@/lib/server/mappers";
 import {
   getChangedSettingFields,
-  getCloudflareTokenSource,
-  isCloudflareConfigured,
-  mergeSettingsToken,
   sanitizeSettingsForAudit,
   sanitizeSettingsForClient
 } from "@/lib/server/settings";
 import { validateSettingsBody } from "@/lib/server/validation";
-import { isMaskedSecretValue } from "@/lib/settings";
 import type { MiniHostSettings } from "@/lib/types";
 
 function normalizeSettings(body: Partial<MiniHostSettings>): MiniHostSettings {
   return {
-    cloudflareApiToken: String(body.cloudflareApiToken ?? ""),
     defaultZoneId: String(body.defaultZoneId ?? "").trim(),
     defaultDomain: String(body.defaultDomain ?? "").trim().toLowerCase(),
     defaultVpsIp: String(body.defaultVpsIp ?? "").trim(),
@@ -30,13 +26,13 @@ export async function GET(request: Request) {
     await requireCurrentUser(request);
     const rows = await prisma.appSetting.findMany();
     const settings = rows.length > 0 ? toSettings(rows) : defaultSettings;
-    const tokenSource = getCloudflareTokenSource(settings);
+    const cloudflare = await getCloudflareClientStatus();
 
     return ok({
       settings: sanitizeSettingsForClient(settings),
-      cloudflareConfigured: isCloudflareConfigured(settings),
-      cloudflareTokenSource: tokenSource,
-      hasStoredCloudflareToken: tokenSource !== "none"
+      cloudflare,
+      cloudflareConfigured: cloudflare.hasToken,
+      hasStoredCloudflareToken: cloudflare.hasToken
     });
   } catch (error) {
     return handleRouteError(error);
@@ -55,12 +51,7 @@ export async function PUT(request: Request) {
 
     const rows = await prisma.appSetting.findMany();
     const previous = rows.length > 0 ? toSettings(rows) : defaultSettings;
-    const next: MiniHostSettings = {
-      ...validation.data,
-      cloudflareApiToken: mergeSettingsToken(previous, incoming.cloudflareApiToken, {
-        isMaskedOrEmpty: isMaskedSecretValue(incoming.cloudflareApiToken)
-      })
-    };
+    const next: MiniHostSettings = validation.data;
 
     await prisma.$transaction(async (tx) => {
       for (const [key, value] of settingsEntries(next)) {
@@ -87,11 +78,13 @@ export async function PUT(request: Request) {
       });
     });
 
+    const cloudflare = await getCloudflareClientStatus();
+
     return ok({
       settings: sanitizeSettingsForClient(next),
-      cloudflareConfigured: isCloudflareConfigured(next),
-      cloudflareTokenSource: getCloudflareTokenSource(next),
-      hasStoredCloudflareToken: getCloudflareTokenSource(next) !== "none"
+      cloudflare,
+      cloudflareConfigured: cloudflare.hasToken,
+      hasStoredCloudflareToken: cloudflare.hasToken
     });
   } catch (error) {
     try {

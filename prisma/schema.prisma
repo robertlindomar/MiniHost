@@ -12,6 +12,12 @@ enum UserRole {
   USER
 }
 
+enum CloudflareCredentialStatus {
+  ACTIVE
+  INVALID
+  DISABLED
+}
+
 model User {
   id           String     @id @default(cuid())
   name         String
@@ -63,6 +69,20 @@ model DnsRecord {
   @@index([source])
   @@index([status])
   @@map("dns_records")
+}
+
+model CloudflareCredential {
+  id              String                     @id @default(cuid())
+  name            String                     @unique @default("default")
+  tokenEncrypted  String
+  status          CloudflareCredentialStatus @default(ACTIVE)
+  lastTestedAt    DateTime?
+  lastTestStatus  String?
+  lastTestMessage String?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  @@map("cloudflare_credentials")
 }
 
 model AppSetting {

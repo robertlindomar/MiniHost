@@ -1,5 +1,5 @@
 import type { DnsRecordFormInput, DomainFormInput, MiniHostSettings } from "@/lib/types";
-import { isMaskedSecretValue, validateSettingsInput } from "@/lib/settings";
+import { validateSettingsInput } from "@/lib/settings";
 import { isDomainLike, isPlausibleZoneId, validateRecordInput } from "@/lib/validation";
 
 export function validateDomainInput(input: DomainFormInput) {
@@ -53,10 +53,7 @@ export function validateSettingsBody(input: Partial<MiniHostSettings>) {
   return {
     errors: errorList,
     fieldErrors: errors,
-    data: {
-      ...data,
-      cloudflareApiToken: isMaskedSecretValue(data.cloudflareApiToken) ? "" : data.cloudflareApiToken.trim()
-    }
+    data
   };
 }
 

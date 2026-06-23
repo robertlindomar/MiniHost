@@ -10,43 +10,51 @@ import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsLoadingState } from "@/components/settings/SettingsLoadingState";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { SettingsStatusBadge } from "@/components/settings/SettingsStatusBadge";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Toast } from "@/components/ui/Toast";
 import { FieldInfoTooltip } from "@/components/ui/FieldInfoTooltip";
 import { apiRequest } from "@/lib/api-client";
-import { validateSettingsInput, type SettingsFieldErrors } from "@/lib/settings";
-import type { Domain, MiniHostSettings } from "@/lib/types";
+import { MASKED_SECRET_VALUE, validateSettingsInput, type SettingsFieldErrors } from "@/lib/settings";
+import type { CloudflareStatus, Domain, MiniHostSettings } from "@/lib/types";
 
-type CloudflareTokenSource = "environment" | "database" | "none";
 type ToastState = { type: "success" | "error" | "info"; message: string } | null;
 
 type SettingsResponse = {
   settings: MiniHostSettings;
-  cloudflareConfigured?: boolean;
-  cloudflareTokenSource?: CloudflareTokenSource;
-  hasStoredCloudflareToken?: boolean;
+  cloudflare: CloudflareStatus;
+};
+
+type TokenMutationResponse = SettingsResponse & {
+  message: string;
 };
 
 type DomainsResponse = { domains: Domain[] };
 type TestConnectionResponse = { message: string };
 
 const defaultSettings: MiniHostSettings = {
-  cloudflareApiToken: "",
   defaultZoneId: "",
   defaultDomain: "",
   defaultVpsIp: "",
   defaultProxyEnabled: true
 };
 
+const defaultCloudflareStatus: CloudflareStatus = {
+  hasToken: false,
+  connectionStatus: "not_configured"
+};
+
 export function SettingsPage() {
   const [settings, setSettings] = useState<MiniHostSettings>(defaultSettings);
   const [domains, setDomains] = useState<Domain[]>([]);
+  const [cloudflare, setCloudflare] = useState<CloudflareStatus>(defaultCloudflareStatus);
   const [tokenDraft, setTokenDraft] = useState("");
-  const [cloudflareConfigured, setCloudflareConfigured] = useState(false);
-  const [cloudflareTokenSource, setCloudflareTokenSource] = useState<CloudflareTokenSource>("none");
-  const [hasStoredCloudflareToken, setHasStoredCloudflareToken] = useState(false);
+  const [isReplacingToken, setIsReplacingToken] = useState(false);
+  const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<SettingsFieldErrors>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingToken, setIsSavingToken] = useState(false);
+  const [isRemovingToken, setIsRemovingToken] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [failedToLoad, setFailedToLoad] = useState(false);
@@ -62,10 +70,9 @@ export function SettingsPage() {
 
       setSettings(settingsData.settings);
       setDomains(domainsData.domains);
-      setCloudflareConfigured(Boolean(settingsData.cloudflareConfigured));
-      setCloudflareTokenSource(settingsData.cloudflareTokenSource ?? "none");
-      setHasStoredCloudflareToken(Boolean(settingsData.hasStoredCloudflareToken));
+      setCloudflare(settingsData.cloudflare ?? defaultCloudflareStatus);
       setTokenDraft("");
+      setIsReplacingToken(false);
       setFieldErrors({});
       setLoadError(null);
       setFailedToLoad(false);
@@ -97,8 +104,9 @@ export function SettingsPage() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  const tokenFromEnvironment = cloudflareTokenSource === "environment";
   const hasDomains = domains.length > 0;
+  const hasStoredToken = cloudflare.hasToken;
+  const showTokenInput = !hasStoredToken || isReplacingToken;
 
   function updateField<Key extends keyof MiniHostSettings>(key: Key, value: MiniHostSettings[Key]) {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -106,11 +114,7 @@ export function SettingsPage() {
   }
 
   function validateForm() {
-    const payload: MiniHostSettings = {
-      ...settings,
-      cloudflareApiToken: tokenDraft
-    };
-    const validation = validateSettingsInput(payload);
+    const validation = validateSettingsInput(settings);
     setFieldErrors(validation.errors);
     return validation;
   }
@@ -127,21 +131,13 @@ export function SettingsPage() {
 
     try {
       setIsSaving(true);
-      const payload: MiniHostSettings = {
-        ...validation.data,
-        cloudflareApiToken: tokenDraft
-      };
-
       const data = await apiRequest<SettingsResponse>("/api/settings", {
         method: "PUT",
-        body: JSON.stringify(payload)
+        body: JSON.stringify(validation.data)
       });
 
       setSettings(data.settings);
-      setCloudflareConfigured(Boolean(data.cloudflareConfigured));
-      setCloudflareTokenSource(data.cloudflareTokenSource ?? "none");
-      setHasStoredCloudflareToken(Boolean(data.hasStoredCloudflareToken));
-      setTokenDraft("");
+      setCloudflare(data.cloudflare ?? defaultCloudflareStatus);
       setToast({ type: "success", message: "Configurações salvas com sucesso." });
     } catch (requestError) {
       setToast({
@@ -150,6 +146,55 @@ export function SettingsPage() {
       });
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleSaveToken() {
+    if (!tokenDraft.trim()) {
+      setToast({ type: "error", message: "Informe o token da Cloudflare." });
+      return;
+    }
+
+    try {
+      setIsSavingToken(true);
+      const data = await apiRequest<TokenMutationResponse>("/api/settings/cloudflare-token", {
+        method: "POST",
+        body: JSON.stringify({ token: tokenDraft })
+      });
+
+      setCloudflare(data.cloudflare ?? defaultCloudflareStatus);
+      setTokenDraft("");
+      setIsReplacingToken(false);
+      setToast({ type: "success", message: data.message });
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível salvar o token."
+      });
+    } finally {
+      setIsSavingToken(false);
+    }
+  }
+
+  async function handleRemoveToken() {
+    try {
+      setIsRemovingToken(true);
+      const data = await apiRequest<TokenMutationResponse>("/api/settings/cloudflare-token", {
+        method: "DELETE"
+      });
+
+      setCloudflare(data.cloudflare ?? defaultCloudflareStatus);
+      setTokenDraft("");
+      setIsReplacingToken(false);
+      setIsRemoveDialogOpen(false);
+      setToast({ type: "success", message: data.message });
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível remover o token."
+      });
+    } finally {
+      setIsRemovingToken(false);
     }
   }
 
@@ -171,12 +216,24 @@ export function SettingsPage() {
         method: "POST",
         body: JSON.stringify({ zoneId: settings.defaultZoneId })
       });
+      setCloudflare((current) => ({
+        ...current,
+        connectionStatus: "connected",
+        lastTestMessage: data.message,
+        lastTestedAt: new Date().toISOString()
+      }));
       setToast({ type: "success", message: data.message });
     } catch (requestError) {
       const message =
         requestError instanceof Error
           ? requestError.message
-          : "Não foi possível validar a conexão com Cloudflare.";
+          : "Não foi possível conectar à Cloudflare. Verifique o token e o Zone ID.";
+      setCloudflare((current) => ({
+        ...current,
+        connectionStatus: "error",
+        lastTestMessage: message,
+        lastTestedAt: new Date().toISOString()
+      }));
       setToast({ type: "error", message });
     } finally {
       setIsTestingConnection(false);
@@ -211,26 +268,93 @@ export function SettingsPage() {
             title="Cloudflare"
             description="Integração usada para sincronizar e publicar registros DNS."
             icon={<Cloud className="h-5 w-5 text-orange-500" />}
-            badge={<SettingsStatusBadge configured={cloudflareConfigured} />}
+            badge={<SettingsStatusBadge status={cloudflare.connectionStatus} />}
           >
-            {tokenFromEnvironment ? (
-              <AlertBox type="info" message="Token configurado via variável de ambiente." />
-            ) : null}
-
             <FormField
               id="settings-token"
               label="Cloudflare API Token"
-              info="Token com permissão de leitura e edição de DNS na zona."
+              info="Token com permissão de leitura e edição de DNS na zona. Depois de salvo, não pode ser visualizado novamente."
             >
-              <SecretInput
-                id="settings-token"
-                value={tokenDraft}
-                onChange={setTokenDraft}
-                disabled={isSaving || tokenFromEnvironment}
-                hasStoredValue={hasStoredCloudflareToken}
-                placeholder="Informe um novo token para substituir o atual"
-              />
+              {showTokenInput ? (
+                <SecretInput
+                  id="settings-token"
+                  value={tokenDraft}
+                  onChange={setTokenDraft}
+                  disabled={isSavingToken || isRemovingToken}
+                  hasStoredValue={false}
+                  placeholder="Cole o token da Cloudflare"
+                />
+              ) : (
+                <input
+                  id="settings-token"
+                  type="password"
+                  value={MASKED_SECRET_VALUE}
+                  readOnly
+                  disabled
+                  className={`${settingsFieldClass} bg-zinc-50 text-zinc-500`}
+                />
+              )}
             </FormField>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              {showTokenInput ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveToken()}
+                    disabled={isSavingToken || isRemovingToken || !tokenDraft.trim()}
+                    className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSavingToken ? "Salvando..." : hasStoredToken ? "Salvar novo token" : "Salvar token"}
+                  </button>
+                  {hasStoredToken ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsReplacingToken(false);
+                        setTokenDraft("");
+                      }}
+                      disabled={isSavingToken || isRemovingToken}
+                      className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancelar
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsReplacingToken(true);
+                      setTokenDraft("");
+                    }}
+                    disabled={isSavingToken || isRemovingToken}
+                    className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Trocar token
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsRemoveDialogOpen(true)}
+                    disabled={isSavingToken || isRemovingToken}
+                    className="inline-flex items-center justify-center rounded-md border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Remover token
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void handleTestConnection()}
+                disabled={isSaving || isTestingConnection || !hasStoredToken || isReplacingToken}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isTestingConnection ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
+                {isTestingConnection ? "Testando conexão..." : "Testar conexão"}
+              </button>
+            </div>
 
             <FormField
               id="settings-zone"
@@ -251,18 +375,6 @@ export function SettingsPage() {
             {!settings.defaultZoneId.trim() ? (
               <AlertBox type="warning" message="Zone ID ausente. A sincronização com Cloudflare pode ficar indisponível." />
             ) : null}
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <button
-                type="button"
-                onClick={() => void handleTestConnection()}
-                disabled={isSaving || isTestingConnection || !cloudflareConfigured}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isTestingConnection ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
-                {isTestingConnection ? "Testando conexão..." : "Testar conexão"}
-              </button>
-            </div>
           </SettingsCard>
 
           <SettingsCard
@@ -369,6 +481,17 @@ export function SettingsPage() {
           </div>
         </form>
       )}
+
+      <ConfirmDialog
+        isOpen={isRemoveDialogOpen}
+        title="Remover token da Cloudflare"
+        message="Tem certeza que deseja remover o token salvo? A sincronização e as operações reais na Cloudflare ficarão indisponíveis até cadastrar um novo token."
+        confirmLabel="Remover token"
+        confirmingLabel="Removendo..."
+        onCancel={() => (isRemovingToken ? undefined : setIsRemoveDialogOpen(false))}
+        onConfirm={() => void handleRemoveToken()}
+        isConfirming={isRemovingToken}
+      />
 
       {toast ? <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} /> : null}
     </div>

@@ -2,15 +2,17 @@
 
 import { Sidebar } from "@/components/layout/Sidebar";
 
+import type { CloudflareConnectionStatus } from "@/lib/types";
+
 interface MobileNavProps {
   isOpen: boolean;
   pathname: string;
   accountName: string;
-  cloudflareConfigured: boolean;
+  cloudflareStatus: CloudflareConnectionStatus;
   onClose: () => void;
 }
 
-export function MobileNav({ isOpen, pathname, accountName, cloudflareConfigured, onClose }: MobileNavProps) {
+export function MobileNav({ isOpen, pathname, accountName, cloudflareStatus, onClose }: MobileNavProps) {
   if (!isOpen) {
     return null;
   }
@@ -27,7 +29,7 @@ export function MobileNav({ isOpen, pathname, accountName, cloudflareConfigured,
         <Sidebar
           pathname={pathname}
           accountName={accountName}
-          cloudflareConfigured={cloudflareConfigured}
+          cloudflareStatus={cloudflareStatus}
           onNavigate={onClose}
         />
       </aside>

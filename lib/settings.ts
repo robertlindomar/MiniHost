@@ -31,7 +31,6 @@ export function validateSettingsInput(input: Partial<MiniHostSettings>) {
   }
 
   const data: MiniHostSettings = {
-    cloudflareApiToken: String(input.cloudflareApiToken ?? ""),
     defaultZoneId,
     defaultDomain,
     defaultVpsIp,
