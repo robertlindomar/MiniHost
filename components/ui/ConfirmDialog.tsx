@@ -10,6 +10,8 @@ interface ConfirmDialogProps {
   warning?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  confirmingLabel?: string;
+  variant?: "danger" | "primary";
   isConfirming?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -22,10 +24,18 @@ export function ConfirmDialog({
   warning,
   confirmLabel = "Excluir",
   cancelLabel = "Cancelar",
+  confirmingLabel,
+  variant = "danger",
   isConfirming = false,
   onCancel,
   onConfirm
 }: ConfirmDialogProps) {
+  const confirmButtonClass =
+    variant === "primary"
+      ? "inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+      : "inline-flex items-center justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-70";
+  const defaultConfirmingLabel = variant === "primary" ? "Confirmando..." : "Excluindo...";
+
   return (
     <Modal
       isOpen={isOpen}
@@ -45,9 +55,9 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isConfirming}
-            className="inline-flex items-center justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
+            className={confirmButtonClass}
           >
-            {isConfirming ? "Excluindo..." : confirmLabel}
+            {isConfirming ? confirmingLabel ?? defaultConfirmingLabel : confirmLabel}
           </button>
         </div>
       }

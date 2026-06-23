@@ -43,6 +43,10 @@ export async function PATCH(request: Request, context: RouteContext) {
         throw new Error("Registro DNS não encontrado.");
       }
 
+      if (body.type !== current.type) {
+        throw new Error("Não é permitido alterar o tipo do registro. Crie um novo registro se precisar trocar o tipo.");
+      }
+
       const domain = await tx.domain.findUnique({ where: { id: data.domainId } });
 
       if (!domain) {
@@ -57,20 +61,35 @@ export async function PATCH(request: Request, context: RouteContext) {
       });
 
       await writeAudit(tx, {
-        action: "Registro editado",
+        action: "DNS_RECORD_UPDATE_LOCAL",
         entityType: "record",
         entityId: updated.id,
         entityName: `${updated.type} ${updated.name}`,
         userId: user.id,
-        description: `Registro ${updated.type} ${updated.name} atualizado em ${domain.name}.`,
-        oldData: toDnsRecord(current),
-        newData: toDnsRecord(updated)
+        description: `Registro ${updated.type} ${updated.name} atualizado localmente em ${domain.name}.`,
+        oldData: {
+          domain: domain.name,
+          type: current.type,
+          name: current.name,
+          content: current.content,
+          proxied: current.proxied
+        },
+        newData: {
+          domain: domain.name,
+          type: updated.type,
+          name: updated.name,
+          content: updated.content,
+          proxied: updated.proxied
+        }
       });
 
       return updated;
     });
 
-    return ok({ record: toDnsRecord(record) });
+    return ok({
+      message: "Registro atualizado apenas localmente.",
+      record: toDnsRecord(record)
+    });
   } catch (error) {
     return handleRouteError(error);
   }

@@ -110,7 +110,7 @@ export function validateRecordInput(input: DnsRecordFormInput) {
     }
   }
 
-  if (typeof input.ttl === "number" && (!Number.isFinite(input.ttl) || input.ttl < 60)) {
+  if (typeof input.ttl === "number" && input.ttl !== 1 && (!Number.isFinite(input.ttl) || input.ttl < 60)) {
     errors.push("TTL manual deve ser de pelo menos 60 segundos.");
   }
 

@@ -38,3 +38,9 @@ export function formatRecordValue(record: DnsRecord) {
 
   return record.value;
 }
+
+export function formatRecordSummary(record: Pick<DnsRecord, "name" | "type" | "value" | "proxied" | "priority">) {
+  const value = record.type === "MX" && typeof record.priority === "number" ? `${record.priority} ${record.value}` : record.value;
+
+  return `${record.name} ${record.type} ${value} proxied=${record.proxied ? "true" : "false"}`;
+}

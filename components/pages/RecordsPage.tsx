@@ -1,6 +1,6 @@
 "use client";
 
-import { Cloud, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Cloud, Pencil, Plus, RefreshCw, Trash2, AlertTriangle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { DnsRecordForm } from "@/components/forms/DnsRecordForm";
@@ -11,7 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Notice } from "@/components/ui/Notice";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { apiRequest } from "@/lib/api-client";
-import { formatDate, formatDateTime, formatRecordValue, formatTtl } from "@/lib/format";
+import { formatDate, formatDateTime, formatRecordSummary, formatRecordValue, formatTtl } from "@/lib/format";
 import type { DnsRecord, DnsRecordFormInput, Domain } from "@/lib/types";
 import { isSensitiveRecord } from "@/lib/validation";
 
@@ -20,6 +20,13 @@ type DomainsResponse = { domains: Domain[] };
 type RecordsResponse = { records: DnsRecord[] };
 type CloudflareSyncResponse = { imported: number; updated: number; total: number; records: DnsRecord[] };
 type CloudflareCreateRecordResponse = { message: string; record: DnsRecord };
+type CloudflareUpdateRecordResponse = { message: string; record: DnsRecord };
+type LocalUpdateRecordResponse = { message: string; record: DnsRecord };
+
+type PendingCloudflareUpdate = {
+  record: DnsRecord;
+  input: DnsRecordFormInput;
+};
 
 function formatCloudflareId(id?: string) {
   if (!id) {
@@ -37,6 +44,7 @@ export function RecordsPage() {
   const [domainFilter, setDomainFilter] = useState(domainFromUrl ?? "all");
   const [editingRecord, setEditingRecord] = useState<DnsRecord | undefined>();
   const [recordToDelete, setRecordToDelete] = useState<DnsRecord | undefined>();
+  const [pendingCloudflareUpdate, setPendingCloudflareUpdate] = useState<PendingCloudflareUpdate | undefined>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -143,16 +151,32 @@ export function RecordsPage() {
     }
   }
 
+  function buildSummaryFromInput(input: DnsRecordFormInput, record: DnsRecord) {
+    return formatRecordSummary({
+      name: input.name,
+      type: record.type,
+      value: input.value,
+      proxied: input.proxied,
+      priority: input.priority
+    });
+  }
+
   async function handleSubmit(input: DnsRecordFormInput) {
     try {
+      if (editingRecord?.cloudflareRecordId) {
+        setPendingCloudflareUpdate({ record: editingRecord, input });
+        closeModal();
+        return;
+      }
+
       setIsSubmitting(true);
 
       if (editingRecord) {
-        await apiRequest<{ record: DnsRecord }>(`/api/records/${editingRecord.id}`, {
+        const result = await apiRequest<LocalUpdateRecordResponse>(`/api/records/${editingRecord.id}`, {
           method: "PATCH",
           body: JSON.stringify(input)
         });
-        setNotice({ type: "success", message: "Registro DNS editado com sucesso." });
+        setNotice({ type: "success", message: result.message || "Registro atualizado apenas localmente." });
       } else if (input.createInCloudflare) {
         const result = await apiRequest<CloudflareCreateRecordResponse>("/api/cloudflare/create-record", {
           method: "POST",
@@ -173,6 +197,44 @@ export function RecordsPage() {
       setNotice({
         type: "error",
         message: requestError instanceof Error ? requestError.message : "Não foi possível salvar o registro DNS."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function confirmCloudflareUpdate() {
+    if (!pendingCloudflareUpdate) {
+      return;
+    }
+
+    const { record, input } = pendingCloudflareUpdate;
+
+    try {
+      setIsSubmitting(true);
+      const result = await apiRequest<CloudflareUpdateRecordResponse>("/api/cloudflare/update-record", {
+        method: "PATCH",
+        body: JSON.stringify({
+          recordId: record.id,
+          name: input.name,
+          content: input.value,
+          ttl: input.ttl,
+          proxied: input.proxied,
+          status: input.status,
+          comment: input.comment ?? "",
+          priority: input.priority
+        })
+      });
+      setNotice({ type: "success", message: result.message || "Registro atualizado na Cloudflare com sucesso." });
+      setPendingCloudflareUpdate(undefined);
+      await reload();
+    } catch (requestError) {
+      setNotice({
+        type: "error",
+        message:
+          requestError instanceof Error
+            ? requestError.message
+            : "Não foi possível atualizar o registro na Cloudflare."
       });
     } finally {
       setIsSubmitting(false);
@@ -356,6 +418,54 @@ export function RecordsPage() {
         onCancel={() => setRecordToDelete(undefined)}
         onConfirm={confirmDelete}
       />
+
+      <Modal
+        isOpen={Boolean(pendingCloudflareUpdate)}
+        title="Confirmar alteração na Cloudflare"
+        onClose={() => setPendingCloudflareUpdate(undefined)}
+        footer={
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setPendingCloudflareUpdate(undefined)}
+              disabled={isSubmitting}
+              className="inline-flex items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmCloudflareUpdate()}
+              disabled={isSubmitting}
+              className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSubmitting ? "Atualizando..." : "Confirmar alteração real na Cloudflare"}
+            </button>
+          </div>
+        }
+      >
+        {pendingCloudflareUpdate ? (
+          <div className="space-y-4 text-sm text-zinc-700">
+            <p>Revise as alterações antes de aplicar na Cloudflare:</p>
+            <div className="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 font-mono text-xs">
+              <div>
+                <p className="mb-1 font-sans font-semibold text-zinc-900">Antes</p>
+                <p>{formatRecordSummary(pendingCloudflareUpdate.record)}</p>
+              </div>
+              <div>
+                <p className="mb-1 font-sans font-semibold text-zinc-900">Depois</p>
+                <p>{buildSummaryFromInput(pendingCloudflareUpdate.input, pendingCloudflareUpdate.record)}</p>
+              </div>
+            </div>
+            {isSensitiveRecord(pendingCloudflareUpdate.record) ? (
+              <div className="flex gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>Este registro parece sensível. Confirme apenas se tiver certeza da alteração.</p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

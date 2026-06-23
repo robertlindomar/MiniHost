@@ -163,7 +163,7 @@ test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
     await page.getByLabel("Valor/conteúdo").fill("72.60.250.41");
     await page.getByRole("button", { name: "Salvar alterações" }).click();
 
-    await expect(page.getByText("Registro DNS editado com sucesso.")).toBeVisible();
+    await expect(page.getByText("Registro atualizado apenas localmente.")).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: editedRecordName })).toBeVisible();
 
     const editedRecordRow = page.getByRole("row").filter({ hasText: editedRecordName });
@@ -181,7 +181,7 @@ test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
 
     await page.getByRole("link", { name: "Histórico" }).click();
     await expect(page.getByRole("row").filter({ hasText: "DNS_RECORD_CREATE_LOCAL" }).filter({ hasText: recordName })).toBeVisible();
-    await expect(page.getByRole("row").filter({ hasText: "Registro editado" }).filter({ hasText: editedRecordName })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "DNS_RECORD_UPDATE_LOCAL" }).filter({ hasText: editedRecordName })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "Registro excluído" }).filter({ hasText: editedRecordName })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "DNS_RECORD_CREATE_LOCAL" }).filter({ hasText: "admin@minihost.local" })).toBeVisible();
   });

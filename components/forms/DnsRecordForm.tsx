@@ -88,8 +88,11 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
   }
 
   const isProxiedDisabled = form.type === "TXT" || form.type === "MX";
+  const isEditing = Boolean(initialData);
+  const isCloudflareLinked = Boolean(initialData?.cloudflareRecordId);
   const isCloudflareSensitive =
     form.createInCloudflare && isSensitiveRecord({ type: form.type as DnsRecordType, name: form.name.trim() });
+  const isEditSensitive = isEditing && initialData ? isSensitiveRecord(initialData) : false;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -122,7 +125,8 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
             id="record-type"
             value={form.type}
             onChange={(event) => updateField("type", event.target.value)}
-            className={fieldClass}
+            className={`${fieldClass} disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500`}
+            disabled={isEditing}
           >
             <option value="A">A</option>
             <option value="AAAA">AAAA</option>
@@ -130,6 +134,9 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
             <option value="TXT">TXT</option>
             <option value="MX">MX</option>
           </select>
+          {isEditing ? (
+            <p className="mt-1 text-xs text-zinc-500">O tipo do registro não pode ser alterado na edição.</p>
+          ) : null}
         </div>
       </div>
 
@@ -247,6 +254,27 @@ export function DnsRecordForm({ domains, initialData, isSubmitting = false, onCa
       </div>
 
       {isProxiedDisabled ? <Notice type="info" message="Registros TXT e MX são criados sem proxy Cloudflare." /> : null}
+
+      {isEditing && !isCloudflareLinked ? (
+        <Notice
+          type="info"
+          message="Este registro não está vinculado à Cloudflare. A edição será apenas local."
+        />
+      ) : null}
+
+      {isEditing && isCloudflareLinked ? (
+        <div className="flex gap-3 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+          <Cloud className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>Este registro está vinculado à Cloudflare. Ao salvar, você verá um resumo antes de confirmar a alteração real.</p>
+        </div>
+      ) : null}
+
+      {isEditSensitive ? (
+        <div className="flex gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>Este registro parece sensível. Revise nome, tipo e conteúdo antes de salvar.</p>
+        </div>
+      ) : null}
 
       {!initialData ? (
         <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-4">

@@ -53,7 +53,7 @@ export function validateDnsRecordBody(input: DnsRecordFormInput) {
       type: input.type,
       name: input.name.trim(),
       content: input.value.trim(),
-      ttl: input.ttl === "auto" ? null : Number(input.ttl),
+      ttl: input.ttl === "auto" || input.ttl === 1 ? null : Number(input.ttl),
       proxied,
       status: input.status === "inactive" ? "inactive" : "active",
       comment: input.comment?.trim() || null,
