@@ -9,6 +9,7 @@ import {
   getPostgresAdminPassword,
   PostgresAdminCredentialError
 } from "@/lib/server/postgres-admin-credential";
+import { assertDatabaseDestructionAllowed } from "@/lib/server/postgres-guard";
 import { prisma } from "@/lib/prisma";
 
 export class PostgresProvisionerError extends Error {
@@ -470,4 +471,165 @@ export async function getProvisionPreview(projectDatabase: Pick<ProjectDatabase,
     confirmationText: buildProvisionConfirmationText(projectDatabase.databaseName),
     maskedSql: buildMaskedProvisionSql(projectDatabase.databaseUser, projectDatabase.databaseName)
   };
+}
+
+async function terminateDatabaseConnections(
+  client: Client,
+  databaseName: string,
+  databaseUser?: string
+) {
+  assertValidIdentifier(databaseName, "Nome do database");
+
+  if (databaseUser) {
+    assertValidIdentifier(databaseUser, "Usuário do database");
+
+    await client.query(
+      `SELECT pg_terminate_backend(pid)
+       FROM pg_stat_activity
+       WHERE datname = $1
+         AND usename = $2
+         AND pid <> pg_backend_pid()`,
+      [databaseName, databaseUser]
+    );
+
+    return;
+  }
+
+  await client.query(
+    `SELECT pg_terminate_backend(pid)
+     FROM pg_stat_activity
+     WHERE datname = $1
+       AND pid <> pg_backend_pid()`,
+    [databaseName]
+  );
+}
+
+async function loadManagedDatabase(projectDatabaseId: string) {
+  const database = await prisma.projectDatabase.findUnique({
+    where: { id: projectDatabaseId }
+  });
+
+  if (!database) {
+    throw new PostgresProvisionerError("Banco não encontrado.");
+  }
+
+  assertValidIdentifier(database.databaseName, "Nome do database");
+  assertValidIdentifier(database.databaseUser, "Usuário do database");
+
+  return database;
+}
+
+export async function disableProjectDatabaseAccess(projectDatabaseId: string, userId: string) {
+  const database = await loadManagedDatabase(projectDatabaseId);
+
+  if (database.status !== "ACTIVE" && database.status !== "CREATED_MANUALLY") {
+    throw new PostgresProvisionerError("Somente bancos ativos ou criados manualmente podem ter o acesso desativado.");
+  }
+
+  const connectionConfig = await getAdminConnectionForProjectDatabase(database);
+
+  await withClient(connectionConfig, async (client) => {
+    await terminateDatabaseConnections(client, database.databaseName, database.databaseUser);
+    await client.query(`REVOKE CONNECT ON DATABASE ${database.databaseName} FROM ${database.databaseUser}`);
+  });
+
+  return prisma.projectDatabase.update({
+    where: { id: database.id },
+    data: {
+      status: "DISABLED",
+      disabledAt: new Date(),
+      disabledBy: userId
+    }
+  });
+}
+
+export async function enableProjectDatabaseAccess(projectDatabaseId: string, userId: string) {
+  const database = await loadManagedDatabase(projectDatabaseId);
+
+  if (database.status !== "DISABLED") {
+    throw new PostgresProvisionerError("Somente bancos desativados podem ter o acesso reativado.");
+  }
+
+  const connectionConfig = await getAdminConnectionForProjectDatabase(database);
+
+  await withClient(connectionConfig, async (client) => {
+    await client.query(`GRANT CONNECT ON DATABASE ${database.databaseName} TO ${database.databaseUser}`);
+  });
+
+  return prisma.projectDatabase.update({
+    where: { id: database.id },
+    data: {
+      status: "ACTIVE",
+      disabledAt: null,
+      disabledBy: null,
+      provisionedAt: database.provisionedAt ?? new Date(),
+      provisionedBy: database.provisionedBy ?? userId
+    }
+  });
+}
+
+export async function destroyProjectDatabase(projectDatabaseId: string, userId: string) {
+  const database = await loadManagedDatabase(projectDatabaseId);
+
+  await assertDatabaseDestructionAllowed(database.databaseName, database.databaseUser, database.status);
+
+  const connectionConfig = await getAdminConnectionForProjectDatabase(database);
+  const dbName = database.databaseName;
+  const dbUser = database.databaseUser;
+
+  await withClient(connectionConfig, async (client) => {
+    await terminateDatabaseConnections(client, dbName);
+  });
+
+  let databaseDropped = false;
+
+  try {
+    await withClient(connectionConfig, async (client) => {
+      await client.query(`DROP DATABASE IF EXISTS ${dbName}`);
+    });
+    databaseDropped = true;
+  } catch (error) {
+    const message = mapPgError(error);
+
+    await prisma.projectDatabase.update({
+      where: { id: database.id },
+      data: {
+        status: "FAILED",
+        lastDestructionError: message
+      }
+    });
+
+    throw new PostgresProvisionerError(message);
+  }
+
+  try {
+    await withClient(connectionConfig, async (client) => {
+      await client.query(`DROP ROLE IF EXISTS ${dbUser}`);
+    });
+  } catch (error) {
+    const message =
+      "Banco removido, mas não foi possível remover o usuário. Verifique objetos pertencentes a este usuário.";
+
+    return prisma.projectDatabase.update({
+      where: { id: database.id },
+      data: {
+        status: "PARTIALLY_DESTROYED",
+        destroyedAt: new Date(),
+        destroyedBy: userId,
+        lastDestructionError: databaseDropped ? message : mapPgError(error)
+      }
+    });
+  }
+
+  return prisma.projectDatabase.update({
+    where: { id: database.id },
+    data: {
+      status: "DESTROYED",
+      destroyedAt: new Date(),
+      destroyedBy: userId,
+      lastDestructionError: null,
+      disabledAt: null,
+      disabledBy: null
+    }
+  });
 }

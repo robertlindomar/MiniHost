@@ -4,6 +4,28 @@ MiniHost é um painel web simples para organizar domínios, subdomínios e regis
 
 O objetivo futuro do projeto é evoluir para uma plataforma de gestão e automação usando PostgreSQL, Cloudflare, Coolify e deploys em VPS.
 
+## Etapa 11.5 implementada
+
+- **Zona de perigo** na tela de detalhes do banco PostgreSQL.
+- **Arquivar**: marca `ARCHIVED` no MiniHost sem alterar o PostgreSQL.
+- **Desativar acesso**: revoga `CONNECT`, encerra conexões ativas e marca `DISABLED`.
+- **Reativar acesso**: restaura `CONNECT` e marca `ACTIVE`.
+- **Destruir banco e usuário**: `DROP DATABASE` + `DROP ROLE` com confirmação forte (`destruir nome_db`).
+- Proteções contra destruição de `postgres`, `minihost`, bancos `template*` e usuário admin.
+- Status `DESTROYED` e `PARTIALLY_DESTROYED` com histórico preservado no MiniHost.
+- Filtro na listagem: Padrão (sem destruídos), Ativos, Desativados, Arquivados, Destruídos, Todos.
+- AuditLog: `PROJECT_DATABASE_DISABLE_ACCESS`, `PROJECT_DATABASE_ENABLE_ACCESS`, `PROJECT_DATABASE_DESTROY_*`.
+
+**Diferenças importantes:**
+
+| Ação | PostgreSQL | Registro MiniHost |
+|------|------------|-------------------|
+| Arquivar | Intacto | `ARCHIVED` |
+| Desativar | Revoga CONNECT | `DISABLED` |
+| Destruir | Remove banco e usuário | `DESTROYED` (histórico) |
+
+**Aviso:** destruir é **irreversível** no PostgreSQL. O registro permanece no MiniHost para auditoria. `DROP DATABASE` não roda dentro de transação Prisma — cada comando usa conexão administrativa separada via `pg`.
+
 ## Etapa 11 implementada
 
 - Model `PostgresAdminCredential` no Prisma com credencial administrativa criptografada.

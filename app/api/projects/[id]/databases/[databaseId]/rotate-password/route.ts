@@ -6,6 +6,7 @@ import {
   decryptDatabasePassword,
   encryptDatabasePassword,
   generateDatabasePassword,
+  isProjectDatabaseMutableStatus,
   sanitizeProjectDatabaseForAudit
 } from "@/lib/server/project-database";
 import { fail, handleRouteError, ok } from "@/lib/server/http";
@@ -28,8 +29,8 @@ export async function POST(request: Request, context: RouteContext) {
       return fail("Banco não encontrado.", 404);
     }
 
-    if (existing.status === "ARCHIVED") {
-      return fail("Não é possível rotacionar senha de um banco arquivado.");
+    if (!isProjectDatabaseMutableStatus(existing.status)) {
+      return fail("Não é possível rotacionar senha deste banco.");
     }
 
     const plainPassword = generateDatabasePassword();

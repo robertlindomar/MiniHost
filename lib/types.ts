@@ -9,7 +9,9 @@ export type ProjectDatabaseStatus =
   | "FAILED"
   | "CREATED_MANUALLY"
   | "DISABLED"
-  | "ARCHIVED";
+  | "ARCHIVED"
+  | "DESTROYED"
+  | "PARTIALLY_DESTROYED";
 
 export type DnsRecordStatus = EntityStatus | "DELETED";
 
@@ -47,6 +49,9 @@ export interface ProjectDatabase {
   hasPassword: boolean;
   provisionedAt?: string;
   lastProvisionError?: string;
+  disabledAt?: string;
+  destroyedAt?: string;
+  lastDestructionError?: string;
 }
 
 export interface ProjectDatabaseFormInput {

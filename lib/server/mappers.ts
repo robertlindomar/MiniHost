@@ -81,7 +81,9 @@ export function toProjectDatabaseStatus(status: string): ProjectDatabaseStatus {
     status === "CREATED_MANUALLY" ||
     status === "ACTIVE" ||
     status === "DISABLED" ||
-    status === "ARCHIVED"
+    status === "ARCHIVED" ||
+    status === "DESTROYED" ||
+    status === "PARTIALLY_DESTROYED"
   ) {
     return status;
   }
@@ -105,7 +107,10 @@ export function toProjectDatabase(database: PrismaProjectDatabase): ProjectDatab
     archivedAt: database.archivedAt?.toISOString(),
     hasPassword: Boolean(database.databasePasswordEncrypted),
     provisionedAt: database.provisionedAt?.toISOString(),
-    lastProvisionError: database.lastProvisionError ?? undefined
+    lastProvisionError: database.lastProvisionError ?? undefined,
+    disabledAt: database.disabledAt?.toISOString(),
+    destroyedAt: database.destroyedAt?.toISOString(),
+    lastDestructionError: database.lastDestructionError ?? undefined
   };
 }
 

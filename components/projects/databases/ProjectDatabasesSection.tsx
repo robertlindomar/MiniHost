@@ -6,6 +6,7 @@ import { ArchiveProjectDatabaseDialog } from "@/components/projects/databases/Ar
 import { ProjectDatabaseDetailModal } from "@/components/projects/databases/ProjectDatabaseDetailModal";
 import { ProjectDatabaseForm } from "@/components/projects/databases/ProjectDatabaseForm";
 import { ProjectDatabaseTable } from "@/components/projects/databases/ProjectDatabaseTable";
+import { DestroyDatabaseModal } from "@/components/projects/databases/DestroyDatabaseModal";
 import { FixPermissionsModal } from "@/components/projects/databases/FixPermissionsModal";
 import { ProvisionDatabaseModal } from "@/components/projects/databases/ProvisionDatabaseModal";
 import { Modal } from "@/components/ui/Modal";
@@ -33,6 +34,7 @@ type GenerateContentResponse = { envContent?: string; sqlContent?: string; warni
 type RotatePasswordResponse = { database: ProjectDatabase; generatedPassword: string };
 type ProvisionResponse = { message: string; database: ProjectDatabase };
 type PermissionResponse = { message: string; verification: ProjectDatabasePermissionVerification };
+type DatabaseMutationResponse = { message: string; database: ProjectDatabase };
 type SettingsStatusResponse = { postgresAdmin?: PostgresAdminStatus };
 
 export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabasesSectionProps) {
@@ -51,6 +53,8 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
   const [pendingSensitiveAction, setPendingSensitiveAction] = useState<"env" | "sql" | null>(null);
   const [isProvisionModalOpen, setIsProvisionModalOpen] = useState(false);
   const [isFixPermissionsModalOpen, setIsFixPermissionsModalOpen] = useState(false);
+  const [isDestroyModalOpen, setIsDestroyModalOpen] = useState(false);
+  const [isDisableAccessDialogOpen, setIsDisableAccessDialogOpen] = useState(false);
   const [permissionVerification, setPermissionVerification] = useState<ProjectDatabasePermissionVerification | undefined>();
   const [hasAdminCredential, setHasAdminCredential] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -223,6 +227,8 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
     setPermissionVerification(undefined);
     setIsProvisionModalOpen(false);
     setIsFixPermissionsModalOpen(false);
+    setIsDestroyModalOpen(false);
+    setIsDisableAccessDialogOpen(false);
   }
 
   async function handleProvision(confirmationText: string) {
@@ -306,6 +312,87 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
     }
   }
 
+  async function handleDisableAccess() {
+    if (!selectedDatabase) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<DatabaseMutationResponse>(
+        `/api/projects/${project.id}/databases/${selectedDatabase.id}/disable-access`,
+        { method: "POST" }
+      );
+      setSelectedDatabase(data.database);
+      setIsDisableAccessDialogOpen(false);
+      setToast({ type: "success", message: data.message });
+      await reload();
+      onChanged?.();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível desativar o acesso."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleEnableAccess() {
+    if (!selectedDatabase) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<DatabaseMutationResponse>(
+        `/api/projects/${project.id}/databases/${selectedDatabase.id}/enable-access`,
+        { method: "POST" }
+      );
+      setSelectedDatabase(data.database);
+      setToast({ type: "success", message: data.message });
+      await reload();
+      onChanged?.();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível reativar o acesso."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleDestroy(confirmationText: string) {
+    if (!selectedDatabase) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<DatabaseMutationResponse>(
+        `/api/projects/${project.id}/databases/${selectedDatabase.id}/destroy`,
+        {
+          method: "POST",
+          body: JSON.stringify({ confirmationText })
+        }
+      );
+      setSelectedDatabase(data.database);
+      setIsDestroyModalOpen(false);
+      setToast({ type: "success", message: data.message });
+      await reload();
+      onChanged?.();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível destruir o banco."
+      });
+      await reload();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-soft">
       <div className="flex flex-col gap-3 border-b border-zinc-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -372,7 +459,14 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
 
       <ProjectDatabaseDetailModal
         database={selectedDatabase}
-        isOpen={Boolean(selectedDatabase) && !pendingSensitiveAction && !isProvisionModalOpen && !isFixPermissionsModalOpen}
+        isOpen={
+          Boolean(selectedDatabase) &&
+          !pendingSensitiveAction &&
+          !isProvisionModalOpen &&
+          !isFixPermissionsModalOpen &&
+          !isDestroyModalOpen &&
+          !isDisableAccessDialogOpen
+        }
         isSubmitting={isSubmitting}
         hasAdminCredential={hasAdminCredential}
         permissionVerification={permissionVerification}
@@ -387,6 +481,10 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
         onProvision={() => setIsProvisionModalOpen(true)}
         onVerifyPermissions={() => void handleVerifyPermissions()}
         onFixPermissions={() => setIsFixPermissionsModalOpen(true)}
+        onArchive={() => selectedDatabase && setDatabaseToArchive(selectedDatabase)}
+        onDisableAccess={() => setIsDisableAccessDialogOpen(true)}
+        onEnableAccess={() => void handleEnableAccess()}
+        onDestroy={() => setIsDestroyModalOpen(true)}
       />
 
       <ProvisionDatabaseModal
@@ -404,6 +502,26 @@ export function ProjectDatabasesSection({ project, onChanged }: ProjectDatabases
         isSubmitting={isSubmitting}
         onClose={() => setIsFixPermissionsModalOpen(false)}
         onConfirm={(confirmationText) => void handleFixPermissions(confirmationText)}
+      />
+
+      <DestroyDatabaseModal
+        database={selectedDatabase}
+        project={project}
+        isOpen={isDestroyModalOpen && Boolean(selectedDatabase)}
+        isSubmitting={isSubmitting}
+        onClose={() => setIsDestroyModalOpen(false)}
+        onConfirm={(confirmationText) => void handleDestroy(confirmationText)}
+      />
+
+      <ConfirmDialog
+        isOpen={isDisableAccessDialogOpen && Boolean(selectedDatabase)}
+        title="Desativar acesso ao banco"
+        message={`Revogar CONNECT do usuário ${selectedDatabase?.databaseUser} no banco ${selectedDatabase?.databaseName}? Conexões ativas serão encerradas.`}
+        confirmLabel="Desativar acesso"
+        confirmingLabel="Desativando..."
+        isConfirming={isSubmitting}
+        onCancel={() => setIsDisableAccessDialogOpen(false)}
+        onConfirm={() => void handleDisableAccess()}
       />
 
       <ConfirmDialog

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
-import { buildManualSql, decryptDatabasePassword, sanitizeProjectDatabaseForAudit } from "@/lib/server/project-database";
+import { buildManualSql, decryptDatabasePassword, isProjectDatabaseMutableStatus, sanitizeProjectDatabaseForAudit } from "@/lib/server/project-database";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toProjectDatabase } from "@/lib/server/mappers";
 
@@ -27,8 +27,8 @@ export async function POST(request: Request, context: RouteContext) {
       return fail("Banco não encontrado.", 404);
     }
 
-    if (existing.status === "ARCHIVED") {
-      return fail("Não é possível gerar SQL de um banco arquivado.");
+    if (!isProjectDatabaseMutableStatus(existing.status)) {
+      return fail("Não é possível gerar SQL para este banco.");
     }
 
     const password = decryptDatabasePassword(existing.databasePasswordEncrypted);

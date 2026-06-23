@@ -1,3 +1,5 @@
+import { isDatabaseReadOnly } from "@/lib/database-danger";
+
 export function buildProvisionConfirmationText(databaseName: string) {
   return `criar banco ${databaseName.trim().toLowerCase()}`;
 }
@@ -38,7 +40,7 @@ export function canProvisionDatabase(
     return false;
   }
 
-  if (status === "ACTIVE" || status === "PROVISIONING" || status === "ARCHIVED" || status === "DISABLED") {
+  if (status === "ACTIVE" || status === "PROVISIONING" || status === "ARCHIVED" || status === "DISABLED" || status === "DESTROYED" || status === "PARTIALLY_DESTROYED") {
     return false;
   }
 
@@ -46,7 +48,7 @@ export function canProvisionDatabase(
 }
 
 export function canManageDatabasePermissions(status: string, hasAdminCredential: boolean) {
-  if (!hasAdminCredential) {
+  if (!hasAdminCredential || isDatabaseReadOnly(status) || status === "DISABLED") {
     return false;
   }
 

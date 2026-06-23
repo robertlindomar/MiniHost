@@ -22,8 +22,8 @@ export async function POST(request: Request, context: RouteContext) {
       return fail("Banco não encontrado.", 404);
     }
 
-    if (existing.status === "ARCHIVED") {
-      return fail("Este banco já está arquivado.");
+    if (existing.status === "ARCHIVED" || existing.status === "DESTROYED" || existing.status === "PARTIALLY_DESTROYED") {
+      return fail("Este banco não pode ser arquivado.");
     }
 
     const archivedAt = new Date();

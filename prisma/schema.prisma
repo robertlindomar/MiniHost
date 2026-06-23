@@ -33,6 +33,8 @@ enum ProjectDatabaseStatus {
   CREATED_MANUALLY
   DISABLED
   ARCHIVED
+  DESTROYED
+  PARTIALLY_DESTROYED
 }
 
 enum PostgresAdminCredentialStatus {
@@ -99,6 +101,11 @@ model ProjectDatabase {
   provisionedAt             DateTime?
   provisionedBy             String?
   lastProvisionError        String?
+  disabledAt                DateTime?
+  disabledBy                String?
+  destroyedAt               DateTime?
+  destroyedBy               String?
+  lastDestructionError      String?
   createdAt                 DateTime              @default(now())
   updatedAt                 DateTime              @updatedAt
   archivedAt                DateTime?

@@ -10,8 +10,10 @@ const statusConfig: Record<
   ACTIVE: { label: "Ativo", variant: "success" },
   FAILED: { label: "Erro", variant: "danger" },
   CREATED_MANUALLY: { label: "Criado manualmente", variant: "warning" },
-  DISABLED: { label: "Desabilitado", variant: "muted" },
-  ARCHIVED: { label: "Arquivado", variant: "danger" }
+  DISABLED: { label: "Desativado", variant: "muted" },
+  ARCHIVED: { label: "Arquivado", variant: "danger" },
+  DESTROYED: { label: "Destruído", variant: "danger" },
+  PARTIALLY_DESTROYED: { label: "Destruído parcialmente", variant: "danger" }
 };
 
 export function ProjectDatabaseStatusBadge({ status }: { status: ProjectDatabaseStatus }) {

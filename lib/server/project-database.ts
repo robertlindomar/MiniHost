@@ -93,3 +93,7 @@ export function sanitizeProjectDatabaseForAudit(database: Record<string, unknown
 export function ensurePasswordLength(password: string) {
   return password.length >= MIN_PASSWORD_LENGTH;
 }
+
+export function isProjectDatabaseMutableStatus(status: string) {
+  return status !== "ARCHIVED" && status !== "DESTROYED" && status !== "PARTIALLY_DESTROYED";
+}

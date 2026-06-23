@@ -1,11 +1,18 @@
 "use client";
 
-import { Copy, Database, RefreshCw, ShieldCheck, TerminalSquare } from "lucide-react";
+import { Archive, Copy, Database, RefreshCw, ShieldAlert, ShieldCheck, TerminalSquare } from "lucide-react";
 import { useState } from "react";
 import { ProjectDatabaseStatusBadge } from "@/components/projects/databases/ProjectDatabaseStatusBadge";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { Modal } from "@/components/ui/Modal";
 import { Notice } from "@/components/ui/Notice";
+import {
+  canDestroyDatabase,
+  canDisableDatabaseAccess,
+  canEnableDatabaseAccess,
+  isDatabaseDestroyed,
+  isDatabaseReadOnly
+} from "@/lib/database-danger";
 import { formatDateTime } from "@/lib/format";
 import { canManageDatabasePermissions, canProvisionDatabase } from "@/lib/provision";
 import { MASKED_SECRET_VALUE } from "@/lib/settings";
@@ -28,6 +35,10 @@ interface ProjectDatabaseDetailModalProps {
   onProvision?: () => void;
   onVerifyPermissions?: () => void;
   onFixPermissions?: () => void;
+  onArchive?: () => void;
+  onDisableAccess?: () => void;
+  onEnableAccess?: () => void;
+  onDestroy?: () => void;
 }
 
 export function ProjectDatabaseDetailModal({
@@ -46,6 +57,10 @@ export function ProjectDatabaseDetailModal({
   onProvision,
   onVerifyPermissions,
   onFixPermissions,
+  onArchive,
+  onDisableAccess,
+  onEnableAccess,
+  onDestroy,
   permissionVerification
 }: ProjectDatabaseDetailModalProps) {
   const [passwordCopied, setPasswordCopied] = useState(false);
@@ -68,9 +83,16 @@ export function ProjectDatabaseDetailModal({
     return null;
   }
 
+  const readOnly = isDatabaseReadOnly(database.status);
+  const destroyed = isDatabaseDestroyed(database.status);
   const showProvisionButton = canProvisionDatabase(database.status, Boolean(hasAdminCredential));
   const showRetryButton = database.status === "FAILED" && showProvisionButton;
   const showPermissionActions = canManageDatabasePermissions(database.status, Boolean(hasAdminCredential));
+  const showDisableAccess = canDisableDatabaseAccess(database.status) && hasAdminCredential;
+  const showEnableAccess = canEnableDatabaseAccess(database.status) && hasAdminCredential;
+  const showDestroy = canDestroyDatabase(database.status) && hasAdminCredential;
+  const showArchive = database.status !== "ARCHIVED" && !destroyed;
+  const showDangerZone = showArchive || showDisableAccess || showEnableAccess || showDestroy;
 
   return (
     <Modal isOpen={isOpen} title={database.name} onClose={onClose}>
@@ -79,6 +101,13 @@ export function ProjectDatabaseDetailModal({
           <ProjectDatabaseStatusBadge status={database.status} />
           <span className="text-sm text-zinc-500">Criado em {formatDateTime(database.createdAt)}</span>
         </div>
+
+        {destroyed ? (
+          <Notice
+            type="info"
+            message="Este banco foi destruído no PostgreSQL. O registro permanece no MiniHost apenas como histórico."
+          />
+        ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
@@ -99,10 +128,12 @@ export function ProjectDatabaseDetailModal({
           </div>
         </div>
 
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
-          <p className="text-xs font-semibold uppercase text-zinc-500">Senha</p>
-          <p className="mt-1 font-mono text-sm text-zinc-700">{MASKED_SECRET_VALUE}</p>
-        </div>
+        {!destroyed ? (
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase text-zinc-500">Senha</p>
+            <p className="mt-1 font-mono text-sm text-zinc-700">{MASKED_SECRET_VALUE}</p>
+          </div>
+        ) : null}
 
         {generatedPassword ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
@@ -126,8 +157,20 @@ export function ProjectDatabaseDetailModal({
           <Notice type="error" message={`Último erro de provisionamento: ${database.lastProvisionError}`} />
         ) : null}
 
+        {database.lastDestructionError ? (
+          <Notice type="error" message={`Último erro de destruição: ${database.lastDestructionError}`} />
+        ) : null}
+
         {database.provisionedAt ? (
           <p className="text-sm text-zinc-500">Provisionado em {formatDateTime(database.provisionedAt)}</p>
+        ) : null}
+
+        {database.disabledAt ? (
+          <p className="text-sm text-zinc-500">Acesso desativado em {formatDateTime(database.disabledAt)}</p>
+        ) : null}
+
+        {database.destroyedAt ? (
+          <p className="text-sm text-zinc-500">Destruído em {formatDateTime(database.destroyedAt)}</p>
         ) : null}
 
         {permissionVerification ? (
@@ -169,7 +212,7 @@ export function ProjectDatabaseDetailModal({
           </div>
         ) : null}
 
-        {database.status !== "ARCHIVED" ? (
+        {!readOnly && !destroyed ? (
           <div className="flex flex-wrap gap-2 border-t border-zinc-200 pt-4">
             {showProvisionButton ? (
               <button
@@ -234,10 +277,68 @@ export function ProjectDatabaseDetailModal({
           </div>
         ) : null}
 
+        {showDangerZone ? (
+          <section className="space-y-4 rounded-lg border border-rose-200 bg-rose-50/60 p-4">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="mt-0.5 h-5 w-5 text-rose-600" />
+              <div>
+                <h4 className="text-sm font-semibold text-rose-900">Zona de perigo</h4>
+                <p className="mt-1 text-sm leading-6 text-rose-800">
+                  Ações destrutivas ou irreversíveis. Arquivar mantém o PostgreSQL intacto; desativar revoga CONNECT;
+                  destruir remove banco e usuário do servidor.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {showArchive ? (
+                <button
+                  type="button"
+                  onClick={() => onArchive?.()}
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  Arquivar
+                </button>
+              ) : null}
+              {showDisableAccess ? (
+                <button
+                  type="button"
+                  onClick={() => onDisableAccess?.()}
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Desativar acesso
+                </button>
+              ) : null}
+              {showEnableAccess ? (
+                <button
+                  type="button"
+                  onClick={() => onEnableAccess?.()}
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Reativar acesso
+                </button>
+              ) : null}
+              {showDestroy ? (
+                <button
+                  type="button"
+                  onClick={() => onDestroy?.()}
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 rounded-md border border-rose-300 bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Destruir banco e usuário
+                </button>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
         {warning ? <Notice type="info" message={warning} /> : null}
 
-        {envContent ? <CodeBlock content={envContent} label=".env gerado" /> : null}
-        {sqlContent ? <CodeBlock content={sqlContent} label="SQL manual" /> : null}
+        {!destroyed && envContent ? <CodeBlock content={envContent} label=".env gerado" /> : null}
+        {!destroyed && sqlContent ? <CodeBlock content={sqlContent} label="SQL manual" /> : null}
       </div>
     </Modal>
   );

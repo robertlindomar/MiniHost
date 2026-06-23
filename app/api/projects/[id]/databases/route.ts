@@ -87,7 +87,7 @@ export async function POST(request: Request, context: RouteContext) {
       where: {
         host: data.host,
         databaseName: data.databaseName,
-        status: { not: "ARCHIVED" }
+        status: { notIn: ["ARCHIVED", "DESTROYED", "PARTIALLY_DESTROYED"] }
       }
     });
 
@@ -99,7 +99,7 @@ export async function POST(request: Request, context: RouteContext) {
       where: {
         host: data.host,
         databaseUser: data.databaseUser,
-        status: { not: "ARCHIVED" }
+        status: { notIn: ["ARCHIVED", "DESTROYED", "PARTIALLY_DESTROYED"] }
       }
     });
 

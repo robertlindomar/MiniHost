@@ -5,6 +5,7 @@ import {
   buildConnectionUrl,
   decryptDatabasePassword,
   encryptDatabasePassword,
+  isProjectDatabaseMutableStatus,
   sanitizeProjectDatabaseForAudit
 } from "@/lib/server/project-database";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
@@ -60,8 +61,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       return fail("Banco não encontrado.", 404);
     }
 
-    if (existing.status === "ARCHIVED") {
-      return fail("Bancos arquivados não podem ser editados.");
+    if (!isProjectDatabaseMutableStatus(existing.status)) {
+      return fail("Este banco não pode ser editado.");
     }
 
     const body = normalizeUpdateInput(await readBody<Partial<ProjectDatabaseFormInput>>(request));
@@ -86,7 +87,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         where: {
           host: data.host,
           databaseName: data.databaseName,
-          status: { not: "ARCHIVED" },
+          status: { notIn: ["ARCHIVED", "DESTROYED", "PARTIALLY_DESTROYED"] },
           id: { not: existing.id }
         }
       });
@@ -101,7 +102,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         where: {
           host: data.host,
           databaseUser: data.databaseUser,
-          status: { not: "ARCHIVED" },
+          status: { notIn: ["ARCHIVED", "DESTROYED", "PARTIALLY_DESTROYED"] },
           id: { not: existing.id }
         }
       });
