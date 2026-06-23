@@ -2,23 +2,44 @@
 
 import { Activity, Clock3, Globe2, RadioTower } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { apiRequest } from "@/lib/api-client";
 import { Badge } from "@/components/ui/Badge";
 import { DataTable, type TableColumn } from "@/components/ui/DataTable";
+import { Notice } from "@/components/ui/Notice";
 import { StatCard } from "@/components/ui/StatCard";
 import { formatDateTime, formatRecordValue, formatTtl } from "@/lib/format";
-import { initializeMiniHostStorage, loadDomains, loadHistory, loadRecords } from "@/lib/storage";
 import type { DnsRecord, Domain, HistoryItem } from "@/lib/types";
+
+interface DashboardResponse {
+  domains: Domain[];
+  records: DnsRecord[];
+  history: HistoryItem[];
+}
 
 export function DashboardPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [records, setRecords] = useState<DnsRecord[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    initializeMiniHostStorage();
-    setDomains(loadDomains());
-    setRecords(loadRecords());
-    setHistory(loadHistory());
+    async function loadDashboard() {
+      try {
+        setIsLoading(true);
+        const data = await apiRequest<DashboardResponse>("/api/dashboard");
+        setDomains(data.domains);
+        setRecords(data.records);
+        setHistory(data.history);
+        setError(null);
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar o dashboard.");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    void loadDashboard();
   }, []);
 
   const latestRecords = useMemo(
@@ -89,9 +110,12 @@ export function DashboardPage() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-zinc-950">Últimos registros criados/editados</h2>
-            <p className="mt-1 text-sm text-zinc-500">Atividade local salva neste navegador.</p>
+            <p className="mt-1 text-sm text-zinc-500">Dados carregados do PostgreSQL.</p>
           </div>
         </div>
+
+        {error ? <Notice type="error" message={error} /> : null}
+        {isLoading ? <Notice type="info" message="Carregando dados do dashboard..." /> : null}
 
         <DataTable
           columns={columns}

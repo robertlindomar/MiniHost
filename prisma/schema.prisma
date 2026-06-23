@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Domain {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  provider  String      @default("Cloudflare")
+  zoneId    String?
+  status    String      @default("active")
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  records   DnsRecord[]
+
+  @@map("domains")
+}
+
+model DnsRecord {
+  id        String   @id @default(cuid())
+  domainId  String
+  type      String
+  name      String
+  content   String
+  ttl       Int?
+  proxied   Boolean  @default(false)
+  status    String   @default("active")
+  comment   String?
+  priority  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  domain    Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId])
+  @@map("dns_records")
+}
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entityType  String
+  entityId    String?
+  entityName  String?
+  description String
+  oldData     Json?
+  newData     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

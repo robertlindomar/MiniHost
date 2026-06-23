@@ -9,12 +9,13 @@ import { Notice } from "@/components/ui/Notice";
 
 interface DomainFormProps {
   initialData?: Domain;
+  isSubmitting?: boolean;
   onCancel: () => void;
-  onSubmit: (input: DomainFormInput) => void;
+  onSubmit: (input: DomainFormInput) => void | Promise<void>;
   submitLabel: string;
 }
 
-export function DomainForm({ initialData, onCancel, onSubmit, submitLabel }: DomainFormProps) {
+export function DomainForm({ initialData, isSubmitting = false, onCancel, onSubmit, submitLabel }: DomainFormProps) {
   const [form, setForm] = useState<DomainFormInput>({
     name: initialData?.name ?? "",
     provider: initialData?.provider ?? "Cloudflare",
@@ -125,6 +126,7 @@ export function DomainForm({ initialData, onCancel, onSubmit, submitLabel }: Dom
         <button
           type="button"
           onClick={onCancel}
+          disabled={isSubmitting}
           className="inline-flex items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
         >
           <X className="h-4 w-4" />
@@ -132,10 +134,11 @@ export function DomainForm({ initialData, onCancel, onSubmit, submitLabel }: Dom
         </button>
         <button
           type="submit"
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+          disabled={isSubmitting}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
         >
           <Save className="h-4 w-4" />
-          {submitLabel}
+          {isSubmitting ? "Salvando..." : submitLabel}
         </button>
       </div>
     </form>

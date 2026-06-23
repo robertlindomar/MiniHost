@@ -1,0 +1,21 @@
+import { prisma } from "@/lib/prisma";
+import { handleRouteError, ok } from "@/lib/server/http";
+import { toDnsRecord, toDomain, toHistoryItem } from "@/lib/server/mappers";
+
+export async function GET() {
+  try {
+    const [domains, records, history] = await Promise.all([
+      prisma.domain.findMany({ orderBy: { createdAt: "desc" } }),
+      prisma.dnsRecord.findMany({ orderBy: { updatedAt: "desc" } }),
+      prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 20 })
+    ]);
+
+    return ok({
+      domains: domains.map(toDomain),
+      records: records.map(toDnsRecord),
+      history: history.map(toHistoryItem)
+    });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}

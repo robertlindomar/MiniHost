@@ -10,6 +10,7 @@ interface ConfirmDialogProps {
   warning?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  isConfirming?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -21,6 +22,7 @@ export function ConfirmDialog({
   warning,
   confirmLabel = "Excluir",
   cancelLabel = "Cancelar",
+  isConfirming = false,
   onCancel,
   onConfirm
 }: ConfirmDialogProps) {
@@ -34,6 +36,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
+            disabled={isConfirming}
             className="inline-flex items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
           >
             {cancelLabel}
@@ -41,9 +44,10 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className="inline-flex items-center justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
+            disabled={isConfirming}
+            className="inline-flex items-center justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {confirmLabel}
+            {isConfirming ? "Excluindo..." : confirmLabel}
           </button>
         </div>
       }

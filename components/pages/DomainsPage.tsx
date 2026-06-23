@@ -9,19 +9,13 @@ import { DataTable, type TableColumn } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { Notice } from "@/components/ui/Notice";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { apiRequest } from "@/lib/api-client";
 import { formatDate } from "@/lib/format";
-import {
-  addHistoryItem,
-  createId,
-  initializeMiniHostStorage,
-  loadDomains,
-  loadRecords,
-  saveDomains,
-  saveRecords
-} from "@/lib/storage";
 import type { Domain, DomainFormInput, DnsRecord } from "@/lib/types";
 
 type NoticeState = { type: "success" | "error" | "info"; message: string } | null;
+type DomainsResponse = { domains: Domain[] };
+type RecordsResponse = { records: DnsRecord[] };
 
 export function DomainsPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
@@ -29,16 +23,31 @@ export function DomainsPage() {
   const [editingDomain, setEditingDomain] = useState<Domain | undefined>();
   const [domainToDelete, setDomainToDelete] = useState<Domain | undefined>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
 
-  function reload() {
-    setDomains(loadDomains());
-    setRecords(loadRecords());
+  async function reload() {
+    try {
+      setIsLoading(true);
+      const [domainData, recordData] = await Promise.all([
+        apiRequest<DomainsResponse>("/api/domains"),
+        apiRequest<RecordsResponse>("/api/records")
+      ]);
+      setDomains(domainData.domains);
+      setRecords(recordData.records);
+    } catch (requestError) {
+      setNotice({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível carregar os domínios."
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   useEffect(() => {
-    initializeMiniHostStorage();
-    reload();
+    void reload();
   }, []);
 
   function openCreateModal() {
@@ -56,7 +65,7 @@ export function DomainsPage() {
     setEditingDomain(undefined);
   }
 
-  function handleSubmit(input: DomainFormInput) {
+  async function handleSubmit(input: DomainFormInput) {
     const duplicated = domains.some((domain) => domain.name === input.name && domain.id !== editingDomain?.id);
 
     if (duplicated) {
@@ -64,73 +73,56 @@ export function DomainsPage() {
       return;
     }
 
-    const now = new Date().toISOString();
+    try {
+      setIsSubmitting(true);
 
-    if (editingDomain) {
-      const nextDomains = domains.map((domain) =>
-        domain.id === editingDomain.id
-          ? {
-              ...domain,
-              ...input,
-              updatedAt: now
-            }
-          : domain
-      );
+      if (editingDomain) {
+        await apiRequest<{ domain: Domain }>(`/api/domains/${editingDomain.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(input)
+        });
+        setNotice({ type: "success", message: "Domínio editado com sucesso." });
+      } else {
+        await apiRequest<{ domain: Domain }>("/api/domains", {
+          method: "POST",
+          body: JSON.stringify(input)
+        });
+        setNotice({ type: "success", message: "Domínio criado com sucesso." });
+      }
 
-      saveDomains(nextDomains);
-      addHistoryItem({
-        action: "Domínio editado",
-        entityType: "domain",
-        entityName: input.name,
-        description: `Domínio ${input.name} atualizado no painel local.`
+      closeModal();
+      await reload();
+    } catch (requestError) {
+      setNotice({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível salvar o domínio."
       });
-      setNotice({ type: "success", message: "Domínio editado com sucesso." });
-    } else {
-      const nextDomain: Domain = {
-        id: createId("domain"),
-        ...input,
-        createdAt: now,
-        updatedAt: now
-      };
-
-      saveDomains([nextDomain, ...domains]);
-      addHistoryItem({
-        action: "Domínio criado",
-        entityType: "domain",
-        entityName: nextDomain.name,
-        description: `Domínio ${nextDomain.name} cadastrado no painel local.`
-      });
-      setNotice({ type: "success", message: "Domínio criado com sucesso." });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    closeModal();
-    reload();
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!domainToDelete) {
       return;
     }
 
-    const affectedRecords = records.filter((record) => record.domainId === domainToDelete.id);
-    const nextDomains = domains.filter((domain) => domain.id !== domainToDelete.id);
-    const nextRecords = records.filter((record) => record.domainId !== domainToDelete.id);
-
-    saveDomains(nextDomains);
-    saveRecords(nextRecords);
-    addHistoryItem({
-      action: "Domínio excluído",
-      entityType: "domain",
-      entityName: domainToDelete.name,
-      description:
-        affectedRecords.length > 0
-          ? `Domínio ${domainToDelete.name} excluído localmente com ${affectedRecords.length} registro(s) associado(s).`
-          : `Domínio ${domainToDelete.name} excluído localmente.`
-    });
-
-    setNotice({ type: "success", message: "Domínio excluído com sucesso." });
-    setDomainToDelete(undefined);
-    reload();
+    try {
+      setIsSubmitting(true);
+      await apiRequest<{ domain: Domain }>(`/api/domains/${domainToDelete.id}`, {
+        method: "DELETE"
+      });
+      setNotice({ type: "success", message: "Domínio excluído com sucesso." });
+      setDomainToDelete(undefined);
+      await reload();
+    } catch (requestError) {
+      setNotice({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível excluir o domínio."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const columns: TableColumn<Domain>[] = [
@@ -193,12 +185,13 @@ export function DomainsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-zinc-950">Domínios cadastrados</h2>
-          <p className="mt-1 text-sm text-zinc-500">Dados persistidos localmente neste navegador.</p>
+          <p className="mt-1 text-sm text-zinc-500">Dados persistidos no PostgreSQL.</p>
         </div>
         <button
           type="button"
           onClick={openCreateModal}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800"
+          disabled={isLoading}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-70"
         >
           <Plus className="h-4 w-4" />
           Novo domínio
@@ -206,12 +199,14 @@ export function DomainsPage() {
       </div>
 
       {notice ? <Notice type={notice.type} message={notice.message} /> : null}
+      {isLoading ? <Notice type="info" message="Carregando domínios..." /> : null}
 
       <DataTable columns={columns} data={domains} emptyMessage="Nenhum domínio cadastrado." getRowKey={(domain) => domain.id} />
 
       <Modal isOpen={isModalOpen} title={editingDomain ? "Editar domínio" : "Novo domínio"} onClose={closeModal}>
         <DomainForm
           initialData={editingDomain}
+          isSubmitting={isSubmitting}
           onCancel={closeModal}
           onSubmit={handleSubmit}
           submitLabel={editingDomain ? "Salvar alterações" : "Criar domínio"}
@@ -221,12 +216,13 @@ export function DomainsPage() {
       <ConfirmDialog
         isOpen={Boolean(domainToDelete)}
         title="Excluir domínio"
-        message={`Deseja excluir ${domainToDelete?.name ?? "este domínio"} do painel local?`}
+        message={`Deseja excluir ${domainToDelete?.name ?? "este domínio"} do banco?`}
         warning={
           records.some((record) => record.domainId === domainToDelete?.id)
-            ? "Os registros DNS locais associados a este domínio também serão removidos."
+            ? "Os registros DNS associados a este domínio também serão removidos do banco."
             : undefined
         }
+        isConfirming={isSubmitting}
         onCancel={() => setDomainToDelete(undefined)}
         onConfirm={confirmDelete}
       />

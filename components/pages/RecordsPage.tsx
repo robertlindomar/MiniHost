@@ -10,19 +10,14 @@ import { DataTable, type TableColumn } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { Notice } from "@/components/ui/Notice";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { apiRequest } from "@/lib/api-client";
 import { formatDate, formatRecordValue, formatTtl } from "@/lib/format";
-import {
-  addHistoryItem,
-  createId,
-  initializeMiniHostStorage,
-  loadDomains,
-  loadRecords,
-  saveRecords
-} from "@/lib/storage";
 import type { DnsRecord, DnsRecordFormInput, Domain } from "@/lib/types";
 import { isSensitiveRecord } from "@/lib/validation";
 
 type NoticeState = { type: "success" | "error" | "info"; message: string } | null;
+type DomainsResponse = { domains: Domain[] };
+type RecordsResponse = { records: DnsRecord[] };
 
 export function RecordsPage() {
   const searchParams = useSearchParams();
@@ -33,16 +28,31 @@ export function RecordsPage() {
   const [editingRecord, setEditingRecord] = useState<DnsRecord | undefined>();
   const [recordToDelete, setRecordToDelete] = useState<DnsRecord | undefined>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(null);
 
-  function reload() {
-    setDomains(loadDomains());
-    setRecords(loadRecords());
+  async function reload() {
+    try {
+      setIsLoading(true);
+      const [domainData, recordData] = await Promise.all([
+        apiRequest<DomainsResponse>("/api/domains"),
+        apiRequest<RecordsResponse>("/api/records")
+      ]);
+      setDomains(domainData.domains);
+      setRecords(recordData.records);
+    } catch (requestError) {
+      setNotice({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível carregar registros DNS."
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   useEffect(() => {
-    initializeMiniHostStorage();
-    reload();
+    void reload();
   }, []);
 
   useEffect(() => {
@@ -79,69 +89,57 @@ export function RecordsPage() {
     setEditingRecord(undefined);
   }
 
-  function handleSubmit(input: DnsRecordFormInput) {
-    const now = new Date().toISOString();
-    const domainName = domainById.get(input.domainId) ?? "Domínio removido";
+  async function handleSubmit(input: DnsRecordFormInput) {
+    try {
+      setIsSubmitting(true);
 
-    if (editingRecord) {
-      const nextRecords = records.map((record) =>
-        record.id === editingRecord.id
-          ? {
-              ...record,
-              ...input,
-              updatedAt: now
-            }
-          : record
-      );
+      if (editingRecord) {
+        await apiRequest<{ record: DnsRecord }>(`/api/records/${editingRecord.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(input)
+        });
+        setNotice({ type: "success", message: "Registro DNS editado com sucesso." });
+      } else {
+        await apiRequest<{ record: DnsRecord }>("/api/records", {
+          method: "POST",
+          body: JSON.stringify(input)
+        });
+        setNotice({ type: "success", message: "Registro DNS criado com sucesso." });
+      }
 
-      saveRecords(nextRecords);
-      addHistoryItem({
-        action: "Registro editado",
-        entityType: "record",
-        entityName: `${input.type} ${input.name}`,
-        description: `Registro ${input.type} ${input.name} atualizado em ${domainName}.`
+      closeModal();
+      await reload();
+    } catch (requestError) {
+      setNotice({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível salvar o registro DNS."
       });
-      setNotice({ type: "success", message: "Registro DNS editado com sucesso." });
-    } else {
-      const nextRecord: DnsRecord = {
-        id: createId("record"),
-        ...input,
-        createdAt: now,
-        updatedAt: now
-      };
-
-      saveRecords([nextRecord, ...records]);
-      addHistoryItem({
-        action: "Registro criado",
-        entityType: "record",
-        entityName: `${nextRecord.type} ${nextRecord.name}`,
-        description: `Registro ${nextRecord.type} ${nextRecord.name} criado em ${domainName}.`
-      });
-      setNotice({ type: "success", message: "Registro DNS criado com sucesso." });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    closeModal();
-    reload();
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!recordToDelete) {
       return;
     }
 
-    const domainName = domainById.get(recordToDelete.domainId) ?? "Domínio removido";
-    const nextRecords = records.filter((record) => record.id !== recordToDelete.id);
-
-    saveRecords(nextRecords);
-    addHistoryItem({
-      action: "Registro excluído",
-      entityType: "record",
-      entityName: `${recordToDelete.type} ${recordToDelete.name}`,
-      description: `Registro ${recordToDelete.type} ${recordToDelete.name} excluído de ${domainName}.`
-    });
-    setNotice({ type: "success", message: "Registro DNS excluído com sucesso." });
-    setRecordToDelete(undefined);
-    reload();
+    try {
+      setIsSubmitting(true);
+      await apiRequest<{ record: DnsRecord }>(`/api/records/${recordToDelete.id}`, {
+        method: "DELETE"
+      });
+      setNotice({ type: "success", message: "Registro DNS excluído com sucesso." });
+      setRecordToDelete(undefined);
+      await reload();
+    } catch (requestError) {
+      setNotice({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível excluir o registro DNS."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const columns: TableColumn<DnsRecord>[] = [
@@ -209,7 +207,7 @@ export function RecordsPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-zinc-950">Registros DNS</h2>
-          <p className="mt-1 text-sm text-zinc-500">Controle visual local para registros A, CNAME, TXT e MX.</p>
+          <p className="mt-1 text-sm text-zinc-500">Controle persistido no PostgreSQL para registros A, CNAME, TXT e MX.</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <select
@@ -227,7 +225,8 @@ export function RecordsPage() {
           <button
             type="button"
             onClick={openCreateModal}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800"
+            disabled={isLoading}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-70"
           >
             <Plus className="h-4 w-4" />
             Novo registro DNS
@@ -236,6 +235,7 @@ export function RecordsPage() {
       </div>
 
       {notice ? <Notice type={notice.type} message={notice.message} /> : null}
+      {isLoading ? <Notice type="info" message="Carregando registros DNS..." /> : null}
 
       <DataTable
         columns={columns}
@@ -248,6 +248,7 @@ export function RecordsPage() {
         <DnsRecordForm
           domains={domains}
           initialData={editingRecord}
+          isSubmitting={isSubmitting}
           onCancel={closeModal}
           onSubmit={handleSubmit}
           submitLabel={editingRecord ? "Salvar alterações" : "Criar registro"}
@@ -257,12 +258,13 @@ export function RecordsPage() {
       <ConfirmDialog
         isOpen={Boolean(recordToDelete)}
         title="Excluir registro DNS"
-        message={`Deseja excluir ${recordToDelete ? `${recordToDelete.type} ${recordToDelete.name}` : "este registro"} do painel local?`}
+        message={`Deseja excluir ${recordToDelete ? `${recordToDelete.type} ${recordToDelete.name}` : "este registro"} do banco?`}
         warning={
           recordToDelete && isSensitiveRecord(recordToDelete)
             ? "Este registro parece sensível para funcionamento do domínio. Revise com atenção antes de excluir."
             : undefined
         }
+        isConfirming={isSubmitting}
         onCancel={() => setRecordToDelete(undefined)}
         onConfirm={confirmDelete}
       />

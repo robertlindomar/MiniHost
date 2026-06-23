@@ -1,0 +1,61 @@
+import type { DnsRecordFormInput, DomainFormInput } from "@/lib/types";
+import { isDomainLike, validateRecordInput } from "@/lib/validation";
+
+export function validateDomainInput(input: DomainFormInput) {
+  const errors: string[] = [];
+  const name = input.name?.trim().toLowerCase();
+  const provider = input.provider?.trim();
+
+  if (!name) {
+    errors.push("Informe o nome do domínio.");
+  }
+
+  if (name && /\s/.test(name)) {
+    errors.push("Nome do domínio não pode ter espaço.");
+  }
+
+  if (name && !isDomainLike(name)) {
+    errors.push("Informe um domínio válido, como exemplo.com.");
+  }
+
+  if (!provider) {
+    errors.push("Informe o provedor.");
+  }
+
+  if (input.status !== "active" && input.status !== "inactive") {
+    errors.push("Status inválido.");
+  }
+
+  return {
+    errors,
+    data: {
+      name,
+      provider,
+      zoneId: input.zoneId?.trim() || null,
+      status: input.status === "inactive" ? "inactive" : "active"
+    }
+  };
+}
+
+export function validateDnsRecordBody(input: DnsRecordFormInput) {
+  const errors = validateRecordInput(input);
+
+  if (!["A", "CNAME", "TXT", "MX"].includes(input.type)) {
+    errors.push("Tipo de registro inválido.");
+  }
+
+  return {
+    errors,
+    data: {
+      domainId: input.domainId,
+      type: input.type,
+      name: input.name.trim(),
+      content: input.value.trim(),
+      ttl: input.ttl === "auto" ? null : Number(input.ttl),
+      proxied: Boolean(input.proxied),
+      status: input.status === "inactive" ? "inactive" : "active",
+      comment: input.comment?.trim() || null,
+      priority: input.type === "MX" ? Number(input.priority) : null
+    }
+  };
+}

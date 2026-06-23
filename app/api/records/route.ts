@@ -1,0 +1,74 @@
+import { prisma } from "@/lib/prisma";
+import { writeAudit } from "@/lib/server/audit";
+import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
+import { toDnsRecord } from "@/lib/server/mappers";
+import { validateDnsRecordBody } from "@/lib/server/validation";
+import type { DnsRecordFormInput, DnsRecordType } from "@/lib/types";
+
+function normalizeRecordInput(body: Partial<DnsRecordFormInput>): DnsRecordFormInput {
+  return {
+    domainId: String(body.domainId ?? ""),
+    type: (body.type ?? "A") as DnsRecordType,
+    name: String(body.name ?? ""),
+    value: String(body.value ?? ""),
+    ttl: body.ttl === "auto" ? "auto" : Number(body.ttl ?? 0),
+    proxied: Boolean(body.proxied),
+    status: body.status === "inactive" ? "inactive" : "active",
+    comment: body.comment ? String(body.comment) : "",
+    priority: body.priority === undefined || body.priority === null ? undefined : Number(body.priority)
+  };
+}
+
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const domainId = url.searchParams.get("domainId");
+
+    const records = await prisma.dnsRecord.findMany({
+      where: domainId ? { domainId } : undefined,
+      orderBy: { updatedAt: "desc" }
+    });
+
+    return ok({ records: records.map(toDnsRecord) });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = normalizeRecordInput(await readBody<Partial<DnsRecordFormInput>>(request));
+    const { data, errors } = validateDnsRecordBody(body);
+
+    if (errors.length > 0) {
+      return fail(errors.join(" "));
+    }
+
+    const domain = await prisma.domain.findUnique({ where: { id: data.domainId } });
+
+    if (!domain) {
+      return fail("Domínio não encontrado.", 404);
+    }
+
+    const record = await prisma.$transaction(async (tx) => {
+      const created = await tx.dnsRecord.create({
+        data
+      });
+
+      await writeAudit(tx, {
+        action: "Registro criado",
+        entityType: "record",
+        entityId: created.id,
+        entityName: `${created.type} ${created.name}`,
+        description: `Registro ${created.type} ${created.name} criado em ${domain.name}.`,
+        newData: toDnsRecord(created)
+      });
+
+      return created;
+    });
+
+    return ok({ record: toDnsRecord(record) }, { status: 201 });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}

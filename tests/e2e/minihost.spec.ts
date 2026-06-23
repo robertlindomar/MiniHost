@@ -1,20 +1,39 @@
 import { expect, test } from "@playwright/test";
+import { loadEnvConfig } from "@next/env";
+import { PrismaClient } from "@prisma/client";
+import { seedInitialData } from "../../prisma/seed-data";
+
+loadEnvConfig(process.cwd());
+
+const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+const prisma = hasDatabaseUrl ? new PrismaClient() : null;
 
 const domainName = "e2e-minihost.dev";
 const editedDomainName = "e2e-minihost-editado.dev";
 const recordName = "app-e2e";
 const editedRecordName = "api-e2e";
 
-async function resetMiniHost(page: import("@playwright/test").Page) {
-  await page.goto("/dashboard");
-  await page.evaluate(() => {
-    window.localStorage.clear();
-  });
+async function resetMiniHostDatabase() {
+  if (!prisma) {
+    return;
+  }
+
+  await prisma.auditLog.deleteMany();
+  await prisma.dnsRecord.deleteMany();
+  await prisma.domain.deleteMany();
+  await prisma.appSetting.deleteMany();
+  await seedInitialData(prisma);
 }
 
-test.describe("MiniHost MVP visual/local", () => {
-  test.beforeEach(async ({ page }) => {
-    await resetMiniHost(page);
+test.describe("MiniHost MVP com PostgreSQL", () => {
+  test.skip(!hasDatabaseUrl, "DATABASE_URL não configurado para testes E2E com PostgreSQL.");
+
+  test.beforeEach(async () => {
+    await resetMiniHostDatabase();
+  });
+
+  test.afterAll(async () => {
+    await prisma?.$disconnect();
   });
 
   test("dashboard abre e menu lateral navega pelas telas principais", async ({ page }) => {
@@ -25,20 +44,23 @@ test.describe("MiniHost MVP visual/local", () => {
     await expect(page.getByText("Total de registros DNS")).toBeVisible();
     await expect(page.getByText("Registros com proxy ativo")).toBeVisible();
     await expect(page.getByText("Última alteração")).toBeVisible();
+    await expect(page.getByText("Carregando dados do dashboard...")).toHaveCount(0, { timeout: 15_000 });
 
-    await page.getByRole("link", { name: "Domínios" }).click();
+    const navigation = page.getByRole("navigation");
+
+    await navigation.getByRole("link", { name: "Domínios" }).click();
     await expect(page).toHaveURL(/\/domains$/);
     await expect(page.getByRole("heading", { level: 1, name: "Domínios" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Registros DNS" }).click();
+    await navigation.getByRole("link", { name: "Registros DNS" }).click();
     await expect(page).toHaveURL(/\/records$/);
     await expect(page.getByRole("heading", { level: 1, name: "Registros DNS" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Histórico" }).click();
+    await navigation.getByRole("link", { name: "Histórico" }).click();
     await expect(page).toHaveURL(/\/history$/);
     await expect(page.getByRole("heading", { level: 1, name: "Histórico" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Configurações" }).click();
+    await navigation.getByRole("link", { name: "Configurações" }).click();
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByRole("heading", { level: 1, name: "Configurações" })).toBeVisible();
   });
@@ -122,10 +144,10 @@ test.describe("MiniHost MVP visual/local", () => {
     await expect(page.getByRole("row").filter({ hasText: "Registro excluído" }).filter({ hasText: editedRecordName })).toBeVisible();
   });
 
-  test("configurações salvam no localStorage", async ({ page }) => {
+  test("configurações salvam no banco", async ({ page }) => {
     await page.goto("/settings");
 
-    await page.getByLabel("Cloudflare API Token").fill("fake-token-local");
+    await page.getByLabel("Cloudflare API Token").fill("fake-token-db");
     await page.getByLabel("Zone ID padrão").fill("fake-zone-default");
     await page.getByLabel("Domínio padrão").fill("robertlindomar.dev");
     await page.getByLabel("IP padrão da VPS").fill("72.60.250.39");
@@ -135,7 +157,7 @@ test.describe("MiniHost MVP visual/local", () => {
     await expect(page.getByText("Configurações salvas com sucesso.")).toBeVisible();
 
     await page.reload();
-    await expect(page.getByLabel("Cloudflare API Token")).toHaveValue("fake-token-local");
+    await expect(page.getByLabel("Cloudflare API Token")).toHaveValue("fake-token-db");
     await expect(page.getByLabel("Zone ID padrão")).toHaveValue("fake-zone-default");
     await expect(page.getByLabel("Proxy Cloudflare padrão")).not.toBeChecked();
 
