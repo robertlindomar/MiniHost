@@ -89,6 +89,7 @@ export function AuditLogFilters({ filters, history, disabled = false, onChange, 
                 <option value="domain">Domínio</option>
                 <option value="record">Registro DNS</option>
                 <option value="project">Projeto</option>
+                <option value="project_database">Banco PostgreSQL</option>
                 <option value="cloudflare">Cloudflare</option>
                 <option value="template">Template DNS</option>
                 <option value="settings">Configuração</option>

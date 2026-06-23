@@ -9,7 +9,11 @@ export function sanitizeSettingsForAudit(settings: MiniHostSettings) {
     defaultZoneId: settings.defaultZoneId,
     defaultDomain: settings.defaultDomain,
     defaultVpsIp: settings.defaultVpsIp,
-    defaultProxyEnabled: settings.defaultProxyEnabled
+    defaultProxyEnabled: settings.defaultProxyEnabled,
+    defaultPostgresHost: settings.defaultPostgresHost,
+    defaultPostgresPort: settings.defaultPostgresPort,
+    defaultPostgresDatabaseSuffix: settings.defaultPostgresDatabaseSuffix,
+    defaultPostgresUserSuffix: settings.defaultPostgresUserSuffix
   };
 }
 

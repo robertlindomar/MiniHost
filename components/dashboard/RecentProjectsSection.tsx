@@ -55,7 +55,8 @@ export function RecentProjectsSection({ projects, isLoading = false }: RecentPro
                 <th className="px-5 py-3">Projeto</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Domínio principal</th>
-                <th className="px-5 py-3">Registros</th>
+                <th className="px-5 py-3">Recursos</th>
+                <th className="px-5 py-3">Banco</th>
                 <th className="px-5 py-3">Criado em</th>
               </tr>
             </thead>
@@ -72,7 +73,16 @@ export function RecentProjectsSection({ projects, isLoading = false }: RecentPro
                     <ProjectStatusBadge status={project.status} />
                   </td>
                   <td className="px-5 py-4 text-zinc-600">{project.mainDomain || "—"}</td>
-                  <td className="px-5 py-4 text-zinc-600">{project.recordCount ?? 0}</td>
+                  <td className="px-5 py-4 text-zinc-600">DNS: {project.recordCount ?? 0}</td>
+                  <td className="px-5 py-4 text-zinc-600">
+                    {(project.databaseCount ?? 0) > 0 ? (
+                      <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                        Configurado ({project.databaseCount})
+                      </span>
+                    ) : (
+                      <span className="text-zinc-500">Sem banco</span>
+                    )}
+                  </td>
                   <td className="px-5 py-4 text-zinc-600">{formatDateTime(project.createdAt)}</td>
                 </tr>
               ))}

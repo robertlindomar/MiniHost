@@ -86,7 +86,7 @@ export function ProjectTable({
                 <th className="px-4 py-3">Descrição</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Domínio principal</th>
-                <th className="px-4 py-3">Registros DNS</th>
+                <th className="px-4 py-3">Recursos</th>
                 <th className="px-4 py-3">Criado em</th>
                 <th className="px-4 py-3 text-right">Ações</th>
               </tr>
@@ -96,6 +96,9 @@ export function ProjectTable({
                 <tr key={project.id} className="text-sm text-zinc-700 transition hover:bg-zinc-50">
                   <td className="px-4 py-4">
                     <div className="font-semibold text-zinc-950">{project.name}</div>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      DNS: {project.recordCount ?? 0} · DB: {project.databaseCount ?? 0}
+                    </p>
                   </td>
                   <td className="px-4 py-4">
                     <span className="font-mono text-xs text-zinc-600">{project.slug}</span>
@@ -107,7 +110,12 @@ export function ProjectTable({
                     <ProjectStatusBadge status={project.status} />
                   </td>
                   <td className="px-4 py-4 text-zinc-600">{project.mainDomain || "—"}</td>
-                  <td className="px-4 py-4 text-zinc-600">{project.recordCount ?? 0}</td>
+                  <td className="px-4 py-4 text-zinc-600">
+                    <span className="inline-flex flex-col gap-1 text-xs">
+                      <span>DNS: {project.recordCount ?? 0}</span>
+                      <span>DB: {project.databaseCount ?? 0}</span>
+                    </span>
+                  </td>
                   <td className="px-4 py-4 text-zinc-600">{formatDateTime(project.createdAt)}</td>
                   <td className="px-4 py-4">
                     <div className="flex justify-end gap-2">

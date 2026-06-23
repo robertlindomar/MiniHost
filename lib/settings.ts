@@ -34,8 +34,26 @@ export function validateSettingsInput(input: Partial<MiniHostSettings>) {
     defaultZoneId,
     defaultDomain,
     defaultVpsIp,
-    defaultProxyEnabled: Boolean(input.defaultProxyEnabled)
+    defaultProxyEnabled: Boolean(input.defaultProxyEnabled),
+    defaultPostgresHost: String(input.defaultPostgresHost ?? "").trim(),
+    defaultPostgresPort: String(input.defaultPostgresPort ?? "5432").trim(),
+    defaultPostgresDatabaseSuffix: String(input.defaultPostgresDatabaseSuffix ?? "_db").trim(),
+    defaultPostgresUserSuffix: String(input.defaultPostgresUserSuffix ?? "_user").trim()
   };
+
+  const postgresPort = Number(data.defaultPostgresPort);
+
+  if (data.defaultPostgresPort && (!Number.isFinite(postgresPort) || postgresPort < 1 || postgresPort > 65535)) {
+    errors.defaultPostgresPort = "Porta PostgreSQL deve estar entre 1 e 65535.";
+  }
+
+  if (data.defaultPostgresDatabaseSuffix && !/^[a-z0-9_]+$/.test(data.defaultPostgresDatabaseSuffix)) {
+    errors.defaultPostgresDatabaseSuffix = "Sufixo do banco deve conter apenas letras minúsculas, números e underscore.";
+  }
+
+  if (data.defaultPostgresUserSuffix && !/^[a-z0-9_]+$/.test(data.defaultPostgresUserSuffix)) {
+    errors.defaultPostgresUserSuffix = "Sufixo do usuário deve conter apenas letras minúsculas, números e underscore.";
+  }
 
   return {
     errors,

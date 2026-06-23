@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { handleRouteError, ok } from "@/lib/server/http";
-import { toDnsRecord, toDomain, toHistoryItem, toProject } from "@/lib/server/mappers";
+import { toDnsRecord, toDomain, toHistoryItem, toProject, toProjectDatabase } from "@/lib/server/mappers";
 
 export async function GET(request: Request) {
   try {
     await requireCurrentUser(request);
-    const [domains, records, projects, history] = await Promise.all([
+    const [domains, records, projects, databases, history] = await Promise.all([
       prisma.domain.findMany({ orderBy: { createdAt: "desc" } }),
       prisma.dnsRecord.findMany({
         where: { status: { not: "DELETED" } },
@@ -27,11 +27,15 @@ export async function GET(request: Request) {
             select: {
               records: {
                 where: { status: { not: "DELETED" } }
+              },
+              databases: {
+                where: { status: { not: "ARCHIVED" } }
               }
             }
           }
         }
       }),
+      prisma.projectDatabase.findMany({ orderBy: { createdAt: "desc" } }),
       prisma.auditLog.findMany({ include: { user: true }, orderBy: { createdAt: "desc" }, take: 20 })
     ]);
 
@@ -39,6 +43,7 @@ export async function GET(request: Request) {
       domains: domains.map(toDomain),
       records: records.map(toDnsRecord),
       projects: projects.map(toProject),
+      databases: databases.map(toProjectDatabase),
       history: history.map(toHistoryItem)
     });
   } catch (error) {

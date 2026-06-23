@@ -4,6 +4,7 @@ import { ArrowLeft, Link2, Unlink } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ProjectDatabasesSection } from "@/components/projects/databases/ProjectDatabasesSection";
 import { LinkRecordsDialog } from "@/components/projects/LinkRecordsDialog";
 import { ProjectStatusBadge } from "@/components/projects/ProjectStatusBadge";
 import { DnsTemplatesPanel } from "@/components/templates/DnsTemplatesPanel";
@@ -204,6 +205,8 @@ export function ProjectDetailPage() {
           </p>
         </div>
       </section>
+
+      <ProjectDatabasesSection project={project} onChanged={() => void reload()} />
 
       {!isArchived ? (
         <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-soft">

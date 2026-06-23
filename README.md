@@ -4,6 +4,22 @@ MiniHost é um painel web simples para organizar domínios, subdomínios e regis
 
 O objetivo futuro do projeto é evoluir para uma plataforma de gestão e automação usando PostgreSQL, Cloudflare, Coolify e deploys em VPS.
 
+## Etapa 10 implementada
+
+- Model `ProjectDatabase` no Prisma com status `PLANNED`, `CREATED_MANUALLY`, `ACTIVE`, `DISABLED` e `ARCHIVED`.
+- Senha e `DATABASE_URL` salvos criptografados com `MINIHOST_ENCRYPTION_KEY`.
+- Seção **Bancos PostgreSQL** na tela de detalhes do projeto.
+- Criar banco planejado com sugestões automáticas baseadas no slug do projeto.
+- Configurações globais **PostgreSQL padrão** (host, porta, sufixos de database e usuário).
+- Gerador de `.env` com confirmação sensível.
+- Gerador de SQL manual para execução no pgAdmin/terminal.
+- Rotação de senha com exibição única após gerar.
+- Histórico: `PROJECT_DATABASE_CREATE`, `PROJECT_DATABASE_UPDATE`, `PROJECT_DATABASE_ARCHIVE`, `PROJECT_DATABASE_ENV_GENERATED`, `PROJECT_DATABASE_SQL_GENERATED`, `PROJECT_DATABASE_PASSWORD_ROTATED`.
+- Dashboard com cards de bancos e indicador de projetos sem banco.
+- Lista de projetos com contadores DNS e DB.
+
+**Importante:** esta etapa **não cria banco real automaticamente**, **não conecta como admin no PostgreSQL** e **não integra com Coolify**. O foco é planejar/registrar bancos, gerar credenciais e exportar `.env`/SQL.
+
 ## Etapa 9 implementada
 
 - Model `Project` no Prisma com status `DRAFT`, `ACTIVE`, `PAUSED` e `ARCHIVED`.
@@ -280,6 +296,39 @@ Eles reutilizam a lógica dos Templates DNS. A diferença é que o novo registro
 
 Na listagem de projetos, clique em `Arquivar`. O projeto muda para status `ARCHIVED` e recebe `archivedAt`, mas os registros DNS vinculados **não são excluídos**.
 
+## Bancos PostgreSQL por projeto
+
+Esta etapa planeja bancos por projeto sem criar o banco real automaticamente.
+
+### Configurar PostgreSQL padrão
+
+1. Acesse `Configurações`.
+2. Na seção **PostgreSQL padrão**, informe host, porta e sufixos.
+3. Exemplo: host `postgres.robertlindomar.dev`, porta `5432`, sufixo database `_db`, sufixo usuário `_user`.
+4. Salve as configurações.
+
+### Criar banco planejado
+
+1. Abra os detalhes de um projeto.
+2. Na seção **Bancos PostgreSQL**, clique em `Novo banco PostgreSQL`.
+3. Revise as sugestões automáticas (`systagio_db`, `systagio_user`, etc.).
+4. Marque **Gerar senha automaticamente** ou informe uma senha com pelo menos 16 caracteres.
+5. A senha gerada é exibida **apenas uma vez** após criar.
+
+### Gerar .env
+
+1. Na tabela ou nos detalhes do banco, clique em `Gerar .env`.
+2. Confirme a ação sensível.
+3. Copie o bloco gerado com `DATABASE_URL` e variáveis `POSTGRES_*`.
+4. **Não compartilhe publicamente** — contém credenciais.
+
+### Gerar SQL manual
+
+1. Clique em `Gerar SQL manual` nos detalhes do banco.
+2. Confirme a ação sensível.
+3. Copie o SQL com `CREATE USER`, `CREATE DATABASE` e `GRANT`.
+4. **Revise antes de executar em produção** no pgAdmin ou terminal.
+
 ## Build
 
 ```bash
@@ -296,10 +345,10 @@ Os testes E2E usam Playwright e cobrem login, logout, proteção de rotas, naveg
 
 ## Próximas etapas sugeridas
 
-1. Módulo de banco PostgreSQL por projeto.
+1. Criação real de banco PostgreSQL via conexão administrativa segura.
 2. Melhorar comparação antes/depois da sincronização.
 3. Integrar com Coolify futuramente.
 
 ## Observação
 
-A exclusão real na Cloudflare já está disponível com confirmação forte. Projetos organizam DNS, mas ainda não criam banco nem integram com Coolify.
+A exclusão real na Cloudflare já está disponível com confirmação forte. Projetos organizam DNS e bancos planejados, mas a criação real do PostgreSQL ainda não é automática.

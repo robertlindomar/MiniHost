@@ -3,9 +3,20 @@ import type {
   AuditLog,
   DnsRecord as PrismaDnsRecord,
   Domain as PrismaDomain,
-  Project as PrismaProject
+  Project as PrismaProject,
+  ProjectDatabase as PrismaProjectDatabase
 } from "@prisma/client";
-import type { DnsRecord, DnsRecordStatus, Domain, HistoryItem, MiniHostSettings, Project, ProjectStatus } from "@/lib/types";
+import type {
+  DnsRecord,
+  DnsRecordStatus,
+  Domain,
+  HistoryItem,
+  MiniHostSettings,
+  Project,
+  ProjectDatabase,
+  ProjectDatabaseStatus,
+  ProjectStatus
+} from "@/lib/types";
 
 type DnsRecordWithProject = PrismaDnsRecord & {
   project?: {
@@ -17,6 +28,7 @@ type DnsRecordWithProject = PrismaDnsRecord & {
 type ProjectWithCount = PrismaProject & {
   _count?: {
     records: number;
+    databases?: number;
   };
 };
 
@@ -31,7 +43,11 @@ export const defaultSettings: MiniHostSettings = {
   defaultZoneId: "",
   defaultDomain: "",
   defaultVpsIp: "",
-  defaultProxyEnabled: true
+  defaultProxyEnabled: true,
+  defaultPostgresHost: "",
+  defaultPostgresPort: "5432",
+  defaultPostgresDatabaseSuffix: "_db",
+  defaultPostgresUserSuffix: "_user"
 };
 
 export function toProjectStatus(status: string): ProjectStatus {
@@ -53,7 +69,39 @@ export function toProject(project: ProjectWithCount): Project {
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
     archivedAt: project.archivedAt?.toISOString(),
-    recordCount: project._count?.records
+    recordCount: project._count?.records,
+    databaseCount: project._count?.databases
+  };
+}
+
+export function toProjectDatabaseStatus(status: string): ProjectDatabaseStatus {
+  if (
+    status === "CREATED_MANUALLY" ||
+    status === "ACTIVE" ||
+    status === "DISABLED" ||
+    status === "ARCHIVED"
+  ) {
+    return status;
+  }
+
+  return "PLANNED";
+}
+
+export function toProjectDatabase(database: PrismaProjectDatabase): ProjectDatabase {
+  return {
+    id: database.id,
+    projectId: database.projectId,
+    name: database.name,
+    databaseName: database.databaseName,
+    databaseUser: database.databaseUser,
+    host: database.host,
+    port: database.port,
+    status: toProjectDatabaseStatus(database.status),
+    notes: database.notes ?? undefined,
+    createdAt: database.createdAt.toISOString(),
+    updatedAt: database.updatedAt.toISOString(),
+    archivedAt: database.archivedAt?.toISOString(),
+    hasPassword: Boolean(database.databasePasswordEncrypted)
   };
 }
 
@@ -110,7 +158,8 @@ export function toHistoryItem(item: AuditLogWithUser): HistoryItem {
       item.entityType === "domain" ||
       item.entityType === "record" ||
       item.entityType === "settings" ||
-      item.entityType === "project"
+      item.entityType === "project" ||
+      item.entityType === "project_database"
         ? item.entityType
         : "settings",
     entityId: item.entityId ?? undefined,
@@ -132,7 +181,12 @@ export function toSettings(rows: AppSetting[]): MiniHostSettings {
     defaultZoneId: values.get("defaultZoneId") ?? defaultSettings.defaultZoneId,
     defaultDomain: values.get("defaultDomain") ?? defaultSettings.defaultDomain,
     defaultVpsIp: values.get("defaultVpsIp") ?? defaultSettings.defaultVpsIp,
-    defaultProxyEnabled: (values.get("defaultProxyEnabled") ?? String(defaultSettings.defaultProxyEnabled)) === "true"
+    defaultProxyEnabled: (values.get("defaultProxyEnabled") ?? String(defaultSettings.defaultProxyEnabled)) === "true",
+    defaultPostgresHost: values.get("defaultPostgresHost") ?? defaultSettings.defaultPostgresHost,
+    defaultPostgresPort: values.get("defaultPostgresPort") ?? defaultSettings.defaultPostgresPort,
+    defaultPostgresDatabaseSuffix:
+      values.get("defaultPostgresDatabaseSuffix") ?? defaultSettings.defaultPostgresDatabaseSuffix,
+    defaultPostgresUserSuffix: values.get("defaultPostgresUserSuffix") ?? defaultSettings.defaultPostgresUserSuffix
   };
 }
 
@@ -141,6 +195,10 @@ export function settingsEntries(settings: MiniHostSettings) {
     ["defaultZoneId", settings.defaultZoneId],
     ["defaultDomain", settings.defaultDomain],
     ["defaultVpsIp", settings.defaultVpsIp],
-    ["defaultProxyEnabled", String(settings.defaultProxyEnabled)]
+    ["defaultProxyEnabled", String(settings.defaultProxyEnabled)],
+    ["defaultPostgresHost", settings.defaultPostgresHost],
+    ["defaultPostgresPort", settings.defaultPostgresPort],
+    ["defaultPostgresDatabaseSuffix", settings.defaultPostgresDatabaseSuffix],
+    ["defaultPostgresUserSuffix", settings.defaultPostgresUserSuffix]
   ] as const;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock3, Database, FolderKanban, Globe2, Link2Off, ShieldCheck } from "lucide-react";
+import { Clock3, Database, FolderKanban, Globe2, Link2Off, Server, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { QuickTemplatesCard } from "@/components/dashboard/QuickTemplatesCard";
@@ -12,12 +12,13 @@ import { Notice } from "@/components/ui/Notice";
 import { pageContainerClass } from "@/components/layout/page-container";
 import { apiRequest } from "@/lib/api-client";
 import { formatDateTime } from "@/lib/format";
-import type { DnsRecord, Domain, HistoryItem, Project } from "@/lib/types";
+import type { DnsRecord, Domain, HistoryItem, Project, ProjectDatabase } from "@/lib/types";
 
 interface DashboardResponse {
   domains: Domain[];
   records: DnsRecord[];
   projects: Project[];
+  databases: ProjectDatabase[];
   history: HistoryItem[];
 }
 
@@ -25,6 +26,7 @@ export function DashboardPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [records, setRecords] = useState<DnsRecord[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [databases, setDatabases] = useState<ProjectDatabase[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +39,7 @@ export function DashboardPage() {
         setDomains(data.domains);
         setRecords(data.records);
         setProjects(data.projects);
+        setDatabases(data.databases);
         setHistory(data.history);
         setError(null);
       } catch (requestError) {
@@ -56,6 +59,22 @@ export function DashboardPage() {
   const recordsWithoutProject = useMemo(
     () => activeRecords.filter((record) => !record.projectId),
     [activeRecords]
+  );
+  const plannedDatabases = useMemo(
+    () => databases.filter((database) => database.status === "PLANNED"),
+    [databases]
+  );
+  const activeDatabases = useMemo(
+    () => databases.filter((database) => database.status === "ACTIVE"),
+    [databases]
+  );
+  const archivedDatabases = useMemo(
+    () => databases.filter((database) => database.status === "ARCHIVED"),
+    [databases]
+  );
+  const projectsWithoutDatabase = useMemo(
+    () => projects.filter((project) => (project.databaseCount ?? 0) === 0 && project.status !== "ARCHIVED"),
+    [projects]
   );
 
   const latestRecords = useMemo(
@@ -151,6 +170,41 @@ export function DashboardPage() {
           value={recordsWithoutProject.length}
           description="Registros ainda não agrupados"
           icon={<Link2Off className="h-5 w-5" />}
+          tone="violet"
+          isLoading={isLoading}
+        />
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Bancos planejados"
+          value={plannedDatabases.length}
+          description="Bancos PostgreSQL registrados como planejados"
+          icon={<Server className="h-5 w-5" />}
+          tone="blue"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Bancos ativos"
+          value={activeDatabases.length}
+          description="Bancos com status ativo"
+          icon={<Database className="h-5 w-5" />}
+          tone="emerald"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Bancos arquivados"
+          value={archivedDatabases.length}
+          description="Bancos arquivados sem exclusão"
+          icon={<Server className="h-5 w-5" />}
+          tone="amber"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Projetos sem banco"
+          value={projectsWithoutDatabase.length}
+          description="Projetos ativos sem banco configurado"
+          icon={<FolderKanban className="h-5 w-5" />}
           tone="violet"
           isLoading={isLoading}
         />

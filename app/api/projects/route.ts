@@ -26,6 +26,9 @@ export async function GET(request: Request) {
           select: {
             records: {
               where: { status: { not: "DELETED" } }
+            },
+            databases: {
+              where: { status: { not: "ARCHIVED" } }
             }
           }
         }
@@ -62,6 +65,9 @@ export async function POST(request: Request) {
             select: {
               records: {
                 where: { status: { not: "DELETED" } }
+              },
+              databases: {
+                where: { status: { not: "ARCHIVED" } }
               }
             }
           }

@@ -2,6 +2,8 @@ export type EntityStatus = "active" | "inactive";
 
 export type ProjectStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "ARCHIVED";
 
+export type ProjectDatabaseStatus = "PLANNED" | "CREATED_MANUALLY" | "ACTIVE" | "DISABLED" | "ARCHIVED";
+
 export type DnsRecordStatus = EntityStatus | "DELETED";
 
 export type DnsRecordType = "A" | "AAAA" | "CNAME" | "TXT" | "MX";
@@ -19,6 +21,43 @@ export interface Project {
   updatedAt: string;
   archivedAt?: string;
   recordCount?: number;
+  databaseCount?: number;
+}
+
+export interface ProjectDatabase {
+  id: string;
+  projectId: string;
+  name: string;
+  databaseName: string;
+  databaseUser: string;
+  host: string;
+  port: number;
+  status: ProjectDatabaseStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  hasPassword: boolean;
+}
+
+export interface ProjectDatabaseFormInput {
+  name: string;
+  databaseName: string;
+  databaseUser: string;
+  password?: string;
+  generatePassword?: boolean;
+  host: string;
+  port: number;
+  status?: ProjectDatabaseStatus;
+  notes?: string;
+}
+
+export interface ProjectDatabaseSuggestions {
+  name: string;
+  databaseName: string;
+  databaseUser: string;
+  host: string;
+  port: number;
 }
 
 export interface ProjectFormInput {
@@ -65,7 +104,7 @@ export interface DnsRecord {
 export interface HistoryItem {
   id: string;
   action: string;
-  entityType: "domain" | "record" | "settings" | "project";
+  entityType: "domain" | "record" | "settings" | "project" | "project_database";
   entityId?: string;
   entityName: string;
   userId?: string;
@@ -82,6 +121,10 @@ export interface MiniHostSettings {
   defaultDomain: string;
   defaultVpsIp: string;
   defaultProxyEnabled: boolean;
+  defaultPostgresHost: string;
+  defaultPostgresPort: string;
+  defaultPostgresDatabaseSuffix: string;
+  defaultPostgresUserSuffix: string;
 }
 
 export type CloudflareConnectionStatus = "connected" | "not_configured" | "error" | "not_tested";

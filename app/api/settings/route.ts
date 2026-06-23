@@ -17,7 +17,11 @@ function normalizeSettings(body: Partial<MiniHostSettings>): MiniHostSettings {
     defaultZoneId: String(body.defaultZoneId ?? "").trim(),
     defaultDomain: String(body.defaultDomain ?? "").trim().toLowerCase(),
     defaultVpsIp: String(body.defaultVpsIp ?? "").trim(),
-    defaultProxyEnabled: Boolean(body.defaultProxyEnabled)
+    defaultProxyEnabled: Boolean(body.defaultProxyEnabled),
+    defaultPostgresHost: String(body.defaultPostgresHost ?? "").trim(),
+    defaultPostgresPort: String(body.defaultPostgresPort ?? "5432").trim(),
+    defaultPostgresDatabaseSuffix: String(body.defaultPostgresDatabaseSuffix ?? "_db").trim(),
+    defaultPostgresUserSuffix: String(body.defaultPostgresUserSuffix ?? "_user").trim()
   };
 }
 

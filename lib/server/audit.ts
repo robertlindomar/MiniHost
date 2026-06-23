@@ -4,7 +4,7 @@ type AuditClient = PrismaClient | Prisma.TransactionClient;
 
 interface AuditInput {
   action: string;
-  entityType: "domain" | "record" | "settings" | "project";
+  entityType: "domain" | "record" | "settings" | "project" | "project_database";
   entityId?: string | null;
   entityName?: string | null;
   userId?: string | null;

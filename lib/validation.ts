@@ -53,6 +53,11 @@ export function isValidProjectSlug(value: string) {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalized);
 }
 
+export function isValidPostgresIdentifier(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return /^[a-z][a-z0-9_]*$/.test(normalized);
+}
+
 export function isDomainLike(value: string) {
   const normalized = value.trim().toLowerCase();
 

@@ -36,7 +36,11 @@ const defaultSettings: MiniHostSettings = {
   defaultZoneId: "",
   defaultDomain: "",
   defaultVpsIp: "",
-  defaultProxyEnabled: true
+  defaultProxyEnabled: true,
+  defaultPostgresHost: "",
+  defaultPostgresPort: "5432",
+  defaultPostgresDatabaseSuffix: "_db",
+  defaultPostgresUserSuffix: "_user"
 };
 
 const defaultCloudflareStatus: CloudflareStatus = {
@@ -475,6 +479,74 @@ export function SettingsPage() {
                 />
               </span>
             </label>
+          </SettingsCard>
+
+          <SettingsCard
+            title="PostgreSQL padrão"
+            description="Valores sugeridos ao planejar bancos por projeto."
+            icon={<Server className="h-5 w-5 text-violet-600" />}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                id="settings-postgres-host"
+                label="Host padrão"
+                info="Host sugerido para novos bancos planejados."
+                error={fieldErrors.defaultPostgresHost}
+              >
+                <input
+                  id="settings-postgres-host"
+                  value={settings.defaultPostgresHost}
+                  disabled={isSaving}
+                  onChange={(event) => updateField("defaultPostgresHost", event.target.value)}
+                  className={fieldClassName(Boolean(fieldErrors.defaultPostgresHost))}
+                  placeholder="postgres.exemplo.com"
+                />
+              </FormField>
+              <FormField
+                id="settings-postgres-port"
+                label="Porta padrão"
+                error={fieldErrors.defaultPostgresPort}
+              >
+                <input
+                  id="settings-postgres-port"
+                  value={settings.defaultPostgresPort}
+                  disabled={isSaving}
+                  onChange={(event) => updateField("defaultPostgresPort", event.target.value)}
+                  className={fieldClassName(Boolean(fieldErrors.defaultPostgresPort))}
+                  placeholder="5432"
+                />
+              </FormField>
+              <FormField
+                id="settings-postgres-db-suffix"
+                label="Sufixo do database"
+                info="Concatenado ao slug do projeto. Ex.: systagio + _db"
+                error={fieldErrors.defaultPostgresDatabaseSuffix}
+              >
+                <input
+                  id="settings-postgres-db-suffix"
+                  value={settings.defaultPostgresDatabaseSuffix}
+                  disabled={isSaving}
+                  onChange={(event) => updateField("defaultPostgresDatabaseSuffix", event.target.value)}
+                  className={fieldClassName(Boolean(fieldErrors.defaultPostgresDatabaseSuffix))}
+                  placeholder="_db"
+                />
+              </FormField>
+              <FormField
+                id="settings-postgres-user-suffix"
+                label="Sufixo do usuário"
+                info="Concatenado ao slug do projeto. Ex.: systagio + _user"
+                error={fieldErrors.defaultPostgresUserSuffix}
+              >
+                <input
+                  id="settings-postgres-user-suffix"
+                  value={settings.defaultPostgresUserSuffix}
+                  disabled={isSaving}
+                  onChange={(event) => updateField("defaultPostgresUserSuffix", event.target.value)}
+                  className={fieldClassName(Boolean(fieldErrors.defaultPostgresUserSuffix))}
+                  placeholder="_user"
+                />
+              </FormField>
+            </div>
           </SettingsCard>
 
           <div className="flex justify-end border-t border-zinc-200 pt-5">

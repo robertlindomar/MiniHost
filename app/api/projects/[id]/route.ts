@@ -15,6 +15,9 @@ const projectInclude = {
     select: {
       records: {
         where: { status: { not: "DELETED" } }
+      },
+      databases: {
+        where: { status: { not: "ARCHIVED" } }
       }
     }
   }
