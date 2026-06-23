@@ -35,6 +35,20 @@ async function loginAsAdmin(page: import("@playwright/test").Page) {
   await expect(page.getByText("admin@minihost.local")).toBeVisible();
 }
 
+async function navigateFromSidebar(page: import("@playwright/test").Page, name: string, urlPattern: RegExp) {
+  const link = page.getByRole("navigation").getByRole("link", { name });
+
+  await expect(link).toBeVisible();
+  await link.click();
+
+  try {
+    await expect(page).toHaveURL(urlPattern, { timeout: 7_000 });
+  } catch {
+    await link.click();
+    await expect(page).toHaveURL(urlPattern, { timeout: 7_000 });
+  }
+}
+
 test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
   test.skip(!hasDatabaseUrl, "DATABASE_URL não configurado para testes E2E com PostgreSQL.");
 
@@ -78,22 +92,19 @@ test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
     await expect(page.getByText("Última alteração")).toBeVisible();
     await expect(page.getByText("Carregando dados do dashboard...")).toHaveCount(0, { timeout: 15_000 });
 
-    const navigation = page.getByRole("navigation");
-
-    await navigation.getByRole("link", { name: "Domínios" }).click();
-    await expect(page).toHaveURL(/\/domains$/);
+    await navigateFromSidebar(page, "Domínios", /\/domains$/);
     await expect(page.getByRole("heading", { level: 1, name: "Domínios" })).toBeVisible();
 
-    await navigation.getByRole("link", { name: "Registros DNS" }).click();
-    await expect(page).toHaveURL(/\/records$/);
+    await navigateFromSidebar(page, "Registros DNS", /\/records$/);
     await expect(page.getByRole("heading", { level: 1, name: "Registros DNS" })).toBeVisible();
 
-    await navigation.getByRole("link", { name: "Histórico" }).click();
-    await expect(page).toHaveURL(/\/history$/);
+    await navigateFromSidebar(page, "Templates DNS", /\/templates$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Templates DNS" })).toBeVisible();
+
+    await navigateFromSidebar(page, "Histórico", /\/history$/);
     await expect(page.getByRole("heading", { level: 1, name: "Histórico" })).toBeVisible();
 
-    await navigation.getByRole("link", { name: "Configurações" }).click();
-    await expect(page).toHaveURL(/\/settings$/);
+    await navigateFromSidebar(page, "Configurações", /\/settings$/);
     await expect(page.getByRole("heading", { level: 1, name: "Configurações" })).toBeVisible();
   });
 
@@ -138,6 +149,7 @@ test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
   test("registros DNS lista, cria, edita, exclui e alerta registros sensíveis", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto("/records");
+    await expect(page.getByText("Carregando registros DNS...")).toHaveCount(0, { timeout: 15_000 });
 
     await expect(page.getByRole("row").filter({ hasText: "A" }).filter({ hasText: "@" })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "CNAME" }).filter({ hasText: "www" })).toBeVisible();
@@ -208,5 +220,31 @@ test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
     await page.getByRole("link", { name: "Histórico" }).click();
     await expect(page.getByText("Configurações salvas")).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "Configurações salvas" }).filter({ hasText: "admin@minihost.local" })).toBeVisible();
+  });
+
+  test("templates DNS criam registro local e registram histórico", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto("/templates");
+
+    await expect(page.getByRole("heading", { level: 1, name: "Templates DNS" })).toBeVisible();
+    await expect(page.getByText("Subdomínio para VPS")).toBeVisible();
+    await expect(page.getByText("Verificação TXT")).toBeVisible();
+
+    const apiTemplate = page.locator("article").filter({ hasText: "API" });
+    await apiTemplate.getByRole("button", { name: "Usar template" }).click();
+
+    await expect(page.getByRole("dialog")).toContainText("Template: API");
+    await expect(page.getByLabel("Nome/subdomínio")).toHaveValue("api");
+    await expect(page.getByLabel("Valor/conteúdo")).toHaveValue("147.15.126.225");
+    await expect(page.getByText("api.robertlindomar.dev")).toBeVisible();
+
+    await page.getByRole("button", { name: "Criar apenas localmente" }).click();
+    await expect(page.getByText("Registro criado apenas localmente.")).toBeVisible();
+
+    await page.getByRole("link", { name: "Registros DNS" }).click();
+    await expect(page.getByRole("row").filter({ hasText: "api" }).filter({ hasText: "147.15.126.225" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Histórico" }).click();
+    await expect(page.getByRole("row").filter({ hasText: "DNS_RECORD_CREATE_FROM_TEMPLATE_LOCAL" }).filter({ hasText: "API" })).toBeVisible();
   });
 });

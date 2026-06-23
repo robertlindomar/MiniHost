@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { DataTable, type TableColumn } from "@/components/ui/DataTable";
 import { Notice } from "@/components/ui/Notice";
 import { StatCard } from "@/components/ui/StatCard";
+import { DnsTemplatesPanel } from "@/components/templates/DnsTemplatesPanel";
 import { formatDateTime, formatRecordValue, formatTtl } from "@/lib/format";
 import type { DnsRecord, Domain, HistoryItem } from "@/lib/types";
 
@@ -104,6 +105,14 @@ export function DashboardPage() {
           description={latestHistory?.action}
           icon={<Clock3 className="h-5 w-5" />}
         />
+      </section>
+
+      <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div>
+          <h2 className="text-lg font-semibold text-zinc-950">Templates rápidos</h2>
+          <p className="mt-1 text-sm text-zinc-500">Crie registros comuns usando domínio e IP padrão das configurações.</p>
+        </div>
+        <DnsTemplatesPanel mode="quick" />
       </section>
 
       <section className="space-y-4">

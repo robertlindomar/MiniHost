@@ -6,6 +6,7 @@ const authApiPaths = ["/api/auth/login", "/api/auth/logout", "/api/auth/me"];
 const routeAliases: Record<string, string> = {
   "/dominios": "/domains",
   "/registros": "/records",
+  "/templates-dns": "/templates",
   "/historico": "/history",
   "/configuracoes": "/settings"
 };

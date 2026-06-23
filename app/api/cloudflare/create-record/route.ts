@@ -22,7 +22,8 @@ function normalizeRecordInput(body: CreateCloudflareRecordBody): DnsRecordFormIn
     proxied: Boolean(body.proxied),
     status: body.status === "inactive" ? "inactive" : "active",
     comment: body.comment ? String(body.comment) : "",
-    priority: body.priority === undefined || body.priority === null ? undefined : Number(body.priority)
+    priority: body.priority === undefined || body.priority === null ? undefined : Number(body.priority),
+    templateName: body.templateName ? String(body.templateName) : undefined
   };
 }
 
@@ -113,14 +114,17 @@ export async function POST(request: Request) {
       });
 
       await writeAudit(tx, {
-        action: "DNS_RECORD_CREATE_CLOUDFLARE",
+        action: body.templateName ? "DNS_RECORD_CREATE_FROM_TEMPLATE_CLOUDFLARE" : "DNS_RECORD_CREATE_CLOUDFLARE",
         entityType: "record",
         entityId: created.id,
         entityName: `${created.type} ${created.name}`,
         userId,
-        description: `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name}.`,
+        description: body.templateName
+          ? `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name} pelo template ${body.templateName}.`
+          : `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name}.`,
         newData: {
           domain: domain.name,
+          templateName: body.templateName,
           type: created.type,
           name: created.name,
           content: created.content,
@@ -159,6 +163,7 @@ export async function POST(request: Request) {
             newData: {
               domainId,
               domainName,
+              templateName: requestedRecord?.templateName,
               type: requestedRecord?.type,
               name: requestedRecord?.name,
               content: requestedRecord?.value

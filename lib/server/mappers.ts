@@ -15,9 +15,9 @@ type AuditLogWithUser = AuditLog & {
 
 export const defaultSettings: MiniHostSettings = {
   cloudflareApiToken: "",
-  defaultZoneId: "fake-zone-robertlindomar",
-  defaultDomain: "robertlindomar.dev",
-  defaultVpsIp: "72.60.250.39",
+  defaultZoneId: "",
+  defaultDomain: "",
+  defaultVpsIp: "",
   defaultProxyEnabled: true
 };
 

@@ -17,7 +17,8 @@ function normalizeRecordInput(body: Partial<DnsRecordFormInput>): DnsRecordFormI
     proxied: Boolean(body.proxied),
     status: body.status === "inactive" ? "inactive" : "active",
     comment: body.comment ? String(body.comment) : "",
-    priority: body.priority === undefined || body.priority === null ? undefined : Number(body.priority)
+    priority: body.priority === undefined || body.priority === null ? undefined : Number(body.priority),
+    templateName: body.templateName ? String(body.templateName) : undefined
   };
 }
 
@@ -73,13 +74,19 @@ export async function POST(request: Request) {
       });
 
       await writeAudit(tx, {
-        action: "DNS_RECORD_CREATE_LOCAL",
+        action: body.templateName ? "DNS_RECORD_CREATE_FROM_TEMPLATE_LOCAL" : "DNS_RECORD_CREATE_LOCAL",
         entityType: "record",
         entityId: created.id,
         entityName: `${created.type} ${created.name}`,
         userId: user.id,
-        description: `Registro ${created.type} ${created.name} criado em ${domain.name}.`,
-        newData: toDnsRecord(created)
+        description: body.templateName
+          ? `Registro ${created.type} ${created.name} criado em ${domain.name} pelo template ${body.templateName}.`
+          : `Registro ${created.type} ${created.name} criado em ${domain.name}.`,
+        newData: {
+          ...toDnsRecord(created),
+          templateName: body.templateName,
+          domain: domain.name
+        }
       });
 
       return created;

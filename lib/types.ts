@@ -74,4 +74,5 @@ export interface DnsRecordFormInput {
   comment?: string;
   priority?: number;
   createInCloudflare?: boolean;
+  templateName?: string;
 }

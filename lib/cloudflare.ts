@@ -70,6 +70,8 @@ function getApiToken() {
 }
 
 function getErrorMessage(status: number, payload?: { errors?: Array<{ code: number; message: string }> }) {
+  const cloudflareMessage = payload?.errors?.[0]?.message;
+
   if (status === 401) {
     return "Token da Cloudflare inválido.";
   }
@@ -78,11 +80,15 @@ function getErrorMessage(status: number, payload?: { errors?: Array<{ code: numb
     return "Zone ID inválido ou token sem permissão para ler DNS desta zona.";
   }
 
+  if (cloudflareMessage && /could not route|object identifier is invalid|zone/i.test(cloudflareMessage)) {
+    return "Zone ID inválido ou token sem permissão para ler DNS desta zona.";
+  }
+
   if (status >= 500) {
     return "Cloudflare indisponível no momento.";
   }
 
-  return payload?.errors?.[0]?.message || "Resposta inesperada da Cloudflare.";
+  return cloudflareMessage || "Resposta inesperada da Cloudflare.";
 }
 
 export async function listDnsRecords(zoneId: string) {

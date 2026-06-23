@@ -3,6 +3,7 @@
 import {
   Globe2,
   History,
+  Layers3,
   LayoutDashboard,
   ListTree,
   LogOut,
@@ -21,6 +22,7 @@ const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/domains", label: "Domínios", icon: Globe2 },
   { href: "/records", label: "Registros DNS", icon: ListTree },
+  { href: "/templates", label: "Templates DNS", icon: Layers3 },
   { href: "/history", label: "Histórico", icon: History },
   { href: "/settings", label: "Configurações", icon: Settings }
 ];
@@ -29,6 +31,7 @@ const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/domains": "Domínios",
   "/records": "Registros DNS",
+  "/templates": "Templates DNS",
   "/history": "Histórico",
   "/settings": "Configurações"
 };
