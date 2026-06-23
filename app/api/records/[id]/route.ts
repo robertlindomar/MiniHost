@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toDnsRecord } from "@/lib/server/mappers";
@@ -25,6 +26,7 @@ function normalizeRecordInput(body: Partial<DnsRecordFormInput>): DnsRecordFormI
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
+    const user = await requireCurrentUser(request);
     const { id } = await context.params;
     const body = normalizeRecordInput(await readBody<Partial<DnsRecordFormInput>>(request));
     const { data, errors } = validateDnsRecordBody(body);
@@ -56,6 +58,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         entityType: "record",
         entityId: updated.id,
         entityName: `${updated.type} ${updated.name}`,
+        userId: user.id,
         description: `Registro ${updated.type} ${updated.name} atualizado em ${domain.name}.`,
         oldData: toDnsRecord(current),
         newData: toDnsRecord(updated)
@@ -70,8 +73,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
+export async function DELETE(request: Request, context: RouteContext) {
   try {
+    const user = await requireCurrentUser(request);
     const { id } = await context.params;
 
     const record = await prisma.$transaction(async (tx) => {
@@ -91,6 +95,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
         entityType: "record",
         entityId: current.id,
         entityName: `${current.type} ${current.name}`,
+        userId: user.id,
         description: `Registro ${current.type} ${current.name} excluído de ${current.domain.name}.`,
         oldData: toDnsRecord(current)
       });

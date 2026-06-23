@@ -15,6 +15,10 @@ export function isDatabaseError(error: unknown) {
 export function handleRouteError(error: unknown) {
   console.error(error);
 
+  if (error instanceof Error && error.message === "Sessão inválida.") {
+    return fail("Sessão inválida.", 401);
+  }
+
   if (isDatabaseError(error)) {
     return fail("Não foi possível conectar ao banco de dados. Verifique o DATABASE_URL e se o PostgreSQL está ativo.", 503);
   }

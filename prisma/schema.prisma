@@ -7,6 +7,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  ADMIN
+  USER
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         UserRole   @default(USER)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
 model Domain {
   id        String      @id @default(cuid())
   name      String      @unique
@@ -55,12 +73,15 @@ model AuditLog {
   entityType  String
   entityId    String?
   entityName  String?
+  userId      String?
   description String
   oldData     Json?
   newData     Json?
   createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([entityType])
+  @@index([userId])
   @@index([createdAt])
   @@map("audit_logs")
 }

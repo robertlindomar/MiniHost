@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toDnsRecord } from "@/lib/server/mappers";
@@ -21,6 +22,7 @@ function normalizeRecordInput(body: Partial<DnsRecordFormInput>): DnsRecordFormI
 
 export async function GET(request: Request) {
   try {
+    await requireCurrentUser(request);
     const url = new URL(request.url);
     const domainId = url.searchParams.get("domainId");
 
@@ -37,6 +39,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const user = await requireCurrentUser(request);
     const body = normalizeRecordInput(await readBody<Partial<DnsRecordFormInput>>(request));
     const { data, errors } = validateDnsRecordBody(body);
 
@@ -60,6 +63,7 @@ export async function POST(request: Request) {
         entityType: "record",
         entityId: created.id,
         entityName: `${created.type} ${created.name}`,
+        userId: user.id,
         description: `Registro ${created.type} ${created.name} criado em ${domain.name}.`,
         newData: toDnsRecord(created)
       });

@@ -6,6 +6,13 @@ import type {
 } from "@prisma/client";
 import type { DnsRecord, Domain, HistoryItem, MiniHostSettings } from "@/lib/types";
 
+type AuditLogWithUser = AuditLog & {
+  user?: {
+    name: string;
+    email: string;
+  } | null;
+};
+
 export const defaultSettings: MiniHostSettings = {
   cloudflareApiToken: "",
   defaultZoneId: "fake-zone-robertlindomar",
@@ -43,7 +50,7 @@ export function toDnsRecord(record: PrismaDnsRecord): DnsRecord {
   };
 }
 
-export function toHistoryItem(item: AuditLog): HistoryItem {
+export function toHistoryItem(item: AuditLogWithUser): HistoryItem {
   return {
     id: item.id,
     action: item.action,
@@ -52,6 +59,8 @@ export function toHistoryItem(item: AuditLog): HistoryItem {
         ? item.entityType
         : "settings",
     entityName: item.entityName ?? item.entityId ?? "Sistema",
+    userName: item.user?.name,
+    userEmail: item.user?.email,
     timestamp: item.createdAt.toISOString(),
     description: item.description
   };

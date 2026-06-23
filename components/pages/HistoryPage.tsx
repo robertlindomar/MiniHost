@@ -42,6 +42,15 @@ export function HistoryPage() {
       cell: (item) => <span className="font-medium text-zinc-950">{item.entityName}</span>
     },
     {
+      header: "Usuário",
+      cell: (item) => (
+        <div>
+          <p className="font-medium text-zinc-900">{item.userName ?? "Sistema"}</p>
+          {item.userEmail ? <p className="mt-1 text-xs text-zinc-500">{item.userEmail}</p> : null}
+        </div>
+      )
+    },
+    {
       header: "Data/hora",
       cell: (item) => formatDateTime(item.timestamp)
     },

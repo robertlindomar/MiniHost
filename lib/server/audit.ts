@@ -7,6 +7,7 @@ interface AuditInput {
   entityType: "domain" | "record" | "settings";
   entityId?: string | null;
   entityName?: string | null;
+  userId?: string | null;
   description: string;
   oldData?: unknown;
   newData?: unknown;
@@ -27,6 +28,7 @@ export function writeAudit(prisma: AuditClient, input: AuditInput) {
       entityType: input.entityType,
       entityId: input.entityId ?? null,
       entityName: input.entityName ?? null,
+      userId: input.userId ?? null,
       description: input.description,
       oldData: toJsonValue(input.oldData),
       newData: toJsonValue(input.newData)

@@ -34,6 +34,8 @@ export interface HistoryItem {
   action: string;
   entityType: "domain" | "record" | "settings";
   entityName: string;
+  userName?: string;
+  userEmail?: string;
   timestamp: string;
   description: string;
 }

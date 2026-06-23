@@ -5,12 +5,17 @@ import {
   History,
   LayoutDashboard,
   ListTree,
+  LogOut,
   Settings,
-  Server
+  Server,
+  UserRound
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { apiRequest } from "@/lib/api-client";
+import type { SessionUser } from "@/lib/auth/session";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -35,7 +40,43 @@ function getPageTitle(pathname: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const title = getPageTitle(pathname);
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  useEffect(() => {
+    async function loadUser() {
+      if (pathname === "/login") {
+        return;
+      }
+
+      try {
+        const data = await apiRequest<{ user: SessionUser }>("/api/auth/me");
+        setUser(data.user);
+      } catch {
+        setUser(null);
+      }
+    }
+
+    void loadUser();
+  }, [pathname]);
+
+  async function handleLogout() {
+    try {
+      setIsLoggingOut(true);
+      await apiRequest<{ ok: boolean }>("/api/auth/logout", {
+        method: "POST"
+      });
+    } finally {
+      router.replace("/login");
+      router.refresh();
+    }
+  }
+
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen bg-[#f6f7f9] text-zinc-950 md:flex">
@@ -72,14 +113,46 @@ export function AppShell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
+
+          <div className="mt-auto hidden border-t border-zinc-200 p-4 md:block">
+            <div className="mb-3 flex items-center gap-3 rounded-lg bg-zinc-50 p-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-white text-zinc-700 shadow-sm">
+                <UserRound className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-zinc-950">{user?.name ?? "Administrador"}</p>
+                <p className="truncate text-xs text-zinc-500">{user?.email ?? "admin@minihost.local"}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <LogOut className="h-4 w-4" />
+              {isLoggingOut ? "Saindo..." : "Sair"}
+            </button>
+          </div>
         </div>
       </aside>
 
       <div className="min-w-0 flex-1">
         <header className="border-b border-zinc-200 bg-white/90 px-5 py-5 backdrop-blur md:px-8">
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium text-emerald-700">MiniHost</p>
-            <h1 className="text-2xl font-semibold tracking-normal text-zinc-950">{title}</h1>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium text-emerald-700">MiniHost</p>
+              <h1 className="text-2xl font-semibold tracking-normal text-zinc-950">{title}</h1>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-70 md:hidden"
+            >
+              <LogOut className="h-4 w-4" />
+              {isLoggingOut ? "Saindo..." : "Sair"}
+            </button>
           </div>
         </header>
 

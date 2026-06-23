@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
 import { handleRouteError, ok, readBody } from "@/lib/server/http";
 import { defaultSettings, settingsEntries, toSettings } from "@/lib/server/mappers";
@@ -14,8 +15,9 @@ function normalizeSettings(body: Partial<MiniHostSettings>): MiniHostSettings {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireCurrentUser(request);
     const rows = await prisma.appSetting.findMany();
     return ok({ settings: rows.length > 0 ? toSettings(rows) : defaultSettings });
   } catch (error) {
@@ -25,6 +27,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    const user = await requireCurrentUser(request);
     const body = normalizeSettings(await readBody<Partial<MiniHostSettings>>(request));
     const rows = await prisma.appSetting.findMany();
     const previous = rows.length > 0 ? toSettings(rows) : defaultSettings;
@@ -41,6 +44,7 @@ export async function PUT(request: Request) {
       await writeAudit(tx, {
         action: "Configurações salvas",
         entityType: "settings",
+        userId: user.id,
         entityName: "Configurações",
         description: "Preferências salvas no banco.",
         oldData: previous,

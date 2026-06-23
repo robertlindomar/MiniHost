@@ -22,10 +22,20 @@ async function resetMiniHostDatabase() {
   await prisma.dnsRecord.deleteMany();
   await prisma.domain.deleteMany();
   await prisma.appSetting.deleteMany();
+  await prisma.user.deleteMany();
   await seedInitialData(prisma);
 }
 
-test.describe("MiniHost MVP com PostgreSQL", () => {
+async function loginAsAdmin(page: import("@playwright/test").Page) {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("admin@minihost.local");
+  await page.getByLabel("Senha").fill("admin123");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByText("admin@minihost.local")).toBeVisible();
+}
+
+test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
   test.skip(!hasDatabaseUrl, "DATABASE_URL não configurado para testes E2E com PostgreSQL.");
 
   test.beforeEach(async () => {
@@ -36,8 +46,30 @@ test.describe("MiniHost MVP com PostgreSQL", () => {
     await prisma?.$disconnect();
   });
 
-  test("dashboard abre e menu lateral navega pelas telas principais", async ({ page }) => {
+  test("bloqueia painel sem login, autentica admin e sai da sessão", async ({ page }) => {
     await page.goto("/dashboard");
+    await expect(page).toHaveURL(/\/login\?next=%2Fdashboard$/);
+
+    await page.getByLabel("Email").fill("admin@minihost.local");
+    await page.getByLabel("Senha").fill("senha-errada");
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await expect(page.getByText("Email ou senha inválidos")).toBeVisible();
+
+    const admin = await prisma?.user.findUnique({ where: { email: "admin@minihost.local" } });
+    expect(admin?.passwordHash).toBeTruthy();
+    expect(admin?.passwordHash).not.toBe("admin123");
+
+    await page.getByLabel("Senha").fill("admin123");
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByText("admin@minihost.local")).toBeVisible();
+
+    await page.getByRole("button", { name: "Sair" }).click();
+    await expect(page).toHaveURL(/\/login$/);
+  });
+
+  test("dashboard abre e menu lateral navega pelas telas principais", async ({ page }) => {
+    await loginAsAdmin(page);
 
     await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
     await expect(page.getByText("Total de domínios")).toBeVisible();
@@ -66,6 +98,7 @@ test.describe("MiniHost MVP com PostgreSQL", () => {
   });
 
   test("domínios lista, cria, edita, exclui e registra histórico", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/domains");
 
     await expect(page.getByText("robertlindomar.dev")).toBeVisible();
@@ -99,9 +132,11 @@ test.describe("MiniHost MVP com PostgreSQL", () => {
     await expect(page.getByRole("row").filter({ hasText: "Domínio criado" }).filter({ hasText: domainName })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "Domínio editado" }).filter({ hasText: editedDomainName })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "Domínio excluído" }).filter({ hasText: editedDomainName })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "Domínio criado" }).filter({ hasText: "admin@minihost.local" })).toBeVisible();
   });
 
   test("registros DNS lista, cria, edita, exclui e alerta registros sensíveis", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/records");
 
     await expect(page.getByRole("row").filter({ hasText: "A" }).filter({ hasText: "@" })).toBeVisible();
@@ -142,9 +177,11 @@ test.describe("MiniHost MVP com PostgreSQL", () => {
     await expect(page.getByRole("row").filter({ hasText: "Registro criado" }).filter({ hasText: recordName })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "Registro editado" }).filter({ hasText: editedRecordName })).toBeVisible();
     await expect(page.getByRole("row").filter({ hasText: "Registro excluído" }).filter({ hasText: editedRecordName })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "Registro criado" }).filter({ hasText: "admin@minihost.local" })).toBeVisible();
   });
 
   test("configurações salvam no banco", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/settings");
 
     await page.getByLabel("Cloudflare API Token").fill("fake-token-db");
@@ -163,5 +200,6 @@ test.describe("MiniHost MVP com PostgreSQL", () => {
 
     await page.getByRole("link", { name: "Histórico" }).click();
     await expect(page.getByText("Configurações salvas")).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "Configurações salvas" }).filter({ hasText: "admin@minihost.local" })).toBeVisible();
   });
 });

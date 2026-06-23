@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toDnsRecord, toDomain } from "@/lib/server/mappers";
@@ -20,6 +21,7 @@ function normalizeDomainInput(body: Partial<DomainFormInput>): DomainFormInput {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
+    const user = await requireCurrentUser(request);
     const { id } = await context.params;
     const body = normalizeDomainInput(await readBody<Partial<DomainFormInput>>(request));
     const { data, errors } = validateDomainInput(body);
@@ -51,6 +53,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         entityType: "domain",
         entityId: updated.id,
         entityName: updated.name,
+        userId: user.id,
         description: `Domínio ${updated.name} atualizado no banco.`,
         oldData: toDomain(current),
         newData: toDomain(updated)
@@ -65,8 +68,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
+export async function DELETE(request: Request, context: RouteContext) {
   try {
+    const user = await requireCurrentUser(request);
     const { id } = await context.params;
 
     const result = await prisma.$transaction(async (tx) => {
@@ -86,6 +90,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
         entityType: "domain",
         entityId: current.id,
         entityName: current.name,
+        userId: user.id,
         description:
           current.records.length > 0
             ? `Domínio ${current.name} excluído do banco com ${current.records.length} registro(s) associado(s).`

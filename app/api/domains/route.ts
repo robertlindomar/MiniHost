@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toDomain } from "@/lib/server/mappers";
@@ -14,8 +15,9 @@ function normalizeDomainInput(body: Partial<DomainFormInput>): DomainFormInput {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireCurrentUser(request);
     const domains = await prisma.domain.findMany({
       orderBy: { createdAt: "desc" }
     });
@@ -28,6 +30,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await requireCurrentUser(request);
     const body = normalizeDomainInput(await readBody<Partial<DomainFormInput>>(request));
     const { data, errors } = validateDomainInput(body);
 
@@ -51,6 +54,7 @@ export async function POST(request: Request) {
         entityType: "domain",
         entityId: created.id,
         entityName: created.name,
+        userId: user.id,
         description: `Domínio ${created.name} cadastrado no banco.`,
         newData: toDomain(created)
       });

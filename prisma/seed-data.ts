@@ -1,6 +1,22 @@
 import type { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 export async function seedInitialData(prisma: PrismaClient) {
+  const passwordHash = await bcrypt.hash("123456", 12);
+  const admin = await prisma.user.upsert({
+    where: { email: "robertlindomar18@gmail.com" },
+    update: {
+      name: "Robert Lindomar",
+      role: "ADMIN"
+    },
+    create: {
+      name: "Robert Lindomar",
+      email: "robertlindomar18@gmail.com",
+      passwordHash,
+      role: "ADMIN"
+    }
+  });
+
   const domain = await prisma.domain.upsert({
     where: { name: "robertlindomar.dev" },
     update: {
@@ -98,9 +114,11 @@ export async function seedInitialData(prisma: PrismaClient) {
     data: {
       action: "Seed executado",
       entityType: "settings",
+      userId: admin.id,
       entityName: "Dados iniciais",
-      description: "Dados iniciais da Etapa 2 criados ou atualizados no PostgreSQL.",
+      description: "Dados iniciais e admin da Etapa 3 criados ou atualizados no PostgreSQL.",
       newData: {
+        admin: admin.email,
         domain: domain.name,
         records: records.map((record) => `${record.type} ${record.name}`)
       }
