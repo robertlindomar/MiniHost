@@ -1,5 +1,6 @@
-import type { DnsRecordFormInput, DomainFormInput } from "@/lib/types";
-import { isDomainLike, validateRecordInput } from "@/lib/validation";
+import type { DnsRecordFormInput, DomainFormInput, MiniHostSettings } from "@/lib/types";
+import { isMaskedSecretValue, validateSettingsInput } from "@/lib/settings";
+import { isDomainLike, isPlausibleZoneId, validateRecordInput } from "@/lib/validation";
 
 export function validateDomainInput(input: DomainFormInput) {
   const errors: string[] = [];
@@ -14,6 +15,10 @@ export function validateDomainInput(input: DomainFormInput) {
     errors.push("Nome do domínio não pode ter espaço.");
   }
 
+  if (name && /^https?:\/\//i.test(name)) {
+    errors.push("Informe apenas o domínio, sem http:// ou https://.");
+  }
+
   if (name && !isDomainLike(name)) {
     errors.push("Informe um domínio válido, como exemplo.com.");
   }
@@ -26,6 +31,10 @@ export function validateDomainInput(input: DomainFormInput) {
     errors.push("Status inválido.");
   }
 
+  if (input.zoneId && !isPlausibleZoneId(input.zoneId)) {
+    errors.push("Zone ID deve ter um formato plausível.");
+  }
+
   return {
     errors,
     data: {
@@ -33,6 +42,20 @@ export function validateDomainInput(input: DomainFormInput) {
       provider,
       zoneId: input.zoneId?.trim() || null,
       status: input.status === "inactive" ? "inactive" : "active"
+    }
+  };
+}
+
+export function validateSettingsBody(input: Partial<MiniHostSettings>) {
+  const { errors, data } = validateSettingsInput(input);
+  const errorList = Object.values(errors);
+
+  return {
+    errors: errorList,
+    fieldErrors: errors,
+    data: {
+      ...data,
+      cloudflareApiToken: isMaskedSecretValue(data.cloudflareApiToken) ? "" : data.cloudflareApiToken.trim()
     }
   };
 }

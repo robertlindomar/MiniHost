@@ -205,21 +205,20 @@ test.describe("MiniHost MVP com PostgreSQL e autenticação", () => {
 
     await page.getByLabel("Cloudflare API Token").fill("fake-token-db");
     await page.getByLabel("Zone ID padrão").fill("fake-zone-default");
-    await page.getByLabel("Domínio padrão").fill("robertlindomar.dev");
+    await page.getByLabel("Domínio padrão").selectOption("robertlindomar.dev");
     await page.getByLabel("IP padrão da VPS").fill("72.60.250.39");
-    await page.getByLabel("Proxy Cloudflare padrão").uncheck();
+    await page.getByLabel("Ativar proxy Cloudflare por padrão").uncheck();
     await page.getByRole("button", { name: "Salvar configurações" }).click();
 
     await expect(page.getByText("Configurações salvas com sucesso.")).toBeVisible();
 
     await page.reload();
-    await expect(page.getByLabel("Cloudflare API Token")).toHaveValue("fake-token-db");
+    await expect(page.getByLabel("Cloudflare API Token")).toHaveAttribute("placeholder", "••••••••••••••••");
     await expect(page.getByLabel("Zone ID padrão")).toHaveValue("fake-zone-default");
-    await expect(page.getByLabel("Proxy Cloudflare padrão")).not.toBeChecked();
+    await expect(page.getByLabel("Ativar proxy Cloudflare por padrão")).not.toBeChecked();
 
     await page.getByRole("link", { name: "Histórico" }).click();
-    await expect(page.getByText("Configurações salvas")).toBeVisible();
-    await expect(page.getByRole("row").filter({ hasText: "Configurações salvas" }).filter({ hasText: "admin@minihost.local" })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "Configurações atualizadas" }).filter({ hasText: "admin@minihost.local" })).toBeVisible();
   });
 
   test("templates DNS criam registro local e registram histórico", async ({ page }) => {

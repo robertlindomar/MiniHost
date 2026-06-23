@@ -58,6 +58,16 @@ export function isDomainLike(value: string) {
   return /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(normalized);
 }
 
+export function isPlausibleZoneId(value: string) {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return true;
+  }
+
+  return /^[a-zA-Z0-9_-]{8,64}$/.test(normalized);
+}
+
 export function validateRecordInput(input: DnsRecordFormInput) {
   const errors: string[] = [];
   const name = input.name.trim();

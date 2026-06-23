@@ -3,17 +3,19 @@
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { FieldInfoTooltip } from "@/components/ui/FieldInfoTooltip";
 
 interface ModalProps {
   isOpen: boolean;
   title: string;
+  titleInfo?: string;
   children: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
   size?: "md" | "lg";
 }
 
-export function Modal({ isOpen, title, children, footer, onClose, size = "md" }: ModalProps) {
+export function Modal({ isOpen, title, titleInfo, children, footer, onClose, size = "md" }: ModalProps) {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -38,7 +40,10 @@ export function Modal({ isOpen, title, children, footer, onClose, size = "md" }:
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-zinc-950/45 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true">
       <div className={`max-h-[92vh] w-full overflow-hidden rounded-t-xl bg-white shadow-soft sm:rounded-xl ${sizeClass}`}>
         <div className="flex items-center justify-between gap-4 border-b border-zinc-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-zinc-950">{title}</h2>
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="text-lg font-semibold text-zinc-950">{title}</h2>
+            {titleInfo ? <FieldInfoTooltip label={title} description={titleInfo} /> : null}
+          </div>
           <button
             type="button"
             onClick={onClose}

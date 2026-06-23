@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     const history = await prisma.auditLog.findMany({
       include: { user: true },
       orderBy: { createdAt: "desc" },
-      take: 100
+      take: 500
     });
 
     return ok({ history: history.map(toHistoryItem) });

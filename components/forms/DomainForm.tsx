@@ -3,9 +3,10 @@
 import { Save, X } from "lucide-react";
 import { useState } from "react";
 import { fieldClass } from "@/components/forms/styles";
-import type { Domain, DomainFormInput } from "@/lib/types";
-import { isDomainLike } from "@/lib/validation";
+import { FormLabel } from "@/components/ui/FormLabel";
 import { Notice } from "@/components/ui/Notice";
+import type { Domain, DomainFormInput } from "@/lib/types";
+import { isDomainLike, isPlausibleZoneId } from "@/lib/validation";
 
 interface DomainFormProps {
   initialData?: Domain;
@@ -42,12 +43,20 @@ export function DomainForm({ initialData, isSubmitting = false, onCancel, onSubm
       nextErrors.push("Nome do domínio não pode ter espaço.");
     }
 
+    if (/^https?:\/\//i.test(name)) {
+      nextErrors.push("Informe apenas o domínio, sem http:// ou https://.");
+    }
+
     if (name && !isDomainLike(name)) {
       nextErrors.push("Informe um domínio válido, como exemplo.com.");
     }
 
     if (!form.provider.trim()) {
       nextErrors.push("Informe o provedor.");
+    }
+
+    if (form.zoneId && !isPlausibleZoneId(form.zoneId)) {
+      nextErrors.push("Zone ID deve ter um formato plausível.");
     }
 
     setErrors(nextErrors);
@@ -67,15 +76,15 @@ export function DomainForm({ initialData, isSubmitting = false, onCancel, onSubm
       {errors.length > 0 ? <Notice type="error" message={errors.join(" ")} /> : null}
 
       <div>
-        <label className="text-sm font-medium text-zinc-700" htmlFor="domain-name">
+        <FormLabel htmlFor="domain-name" info="Digite o domínio exatamente como será gerenciado." className="text-sm font-medium text-zinc-700">
           Nome do domínio
-        </label>
+        </FormLabel>
         <input
           id="domain-name"
           value={form.name}
           onChange={(event) => updateField("name", event.target.value)}
           className={fieldClass}
-          placeholder="robertlindomar.dev"
+          placeholder="ex.: minihost.com.br"
         />
       </div>
 
@@ -86,10 +95,10 @@ export function DomainForm({ initialData, isSubmitting = false, onCancel, onSubm
           </label>
           <input
             id="domain-provider"
-            value={form.provider}
-            onChange={(event) => updateField("provider", event.target.value)}
-            className={fieldClass}
-            placeholder="Cloudflare"
+          value={form.provider}
+          onChange={(event) => updateField("provider", event.target.value)}
+          className={fieldClass}
+          placeholder="Cloudflare"
           />
         </div>
 
@@ -110,15 +119,15 @@ export function DomainForm({ initialData, isSubmitting = false, onCancel, onSubm
       </div>
 
       <div>
-        <label className="text-sm font-medium text-zinc-700" htmlFor="domain-zone">
-          Zone ID fake/opcional
-        </label>
+        <FormLabel htmlFor="domain-zone" info="Encontre o Zone ID no painel da Cloudflare." className="text-sm font-medium text-zinc-700">
+          Zone ID opcional
+        </FormLabel>
         <input
           id="domain-zone"
           value={form.zoneId}
           onChange={(event) => updateField("zoneId", event.target.value)}
           className={fieldClass}
-          placeholder="fake-zone-id"
+          placeholder="ex.: f4b7d2e8c9a64b16a2d3f5e6b7c8d9e0"
         />
       </div>
 

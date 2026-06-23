@@ -72,11 +72,15 @@ export function toHistoryItem(item: AuditLogWithUser): HistoryItem {
       item.entityType === "domain" || item.entityType === "record" || item.entityType === "settings"
         ? item.entityType
         : "settings",
+    entityId: item.entityId ?? undefined,
     entityName: item.entityName ?? item.entityId ?? "Sistema",
+    userId: item.userId ?? undefined,
     userName: item.user?.name,
     userEmail: item.user?.email,
     timestamp: item.createdAt.toISOString(),
-    description: item.description
+    description: item.description,
+    oldData: item.oldData ?? undefined,
+    newData: item.newData ?? undefined
   };
 }
 

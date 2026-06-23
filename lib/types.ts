@@ -41,11 +41,15 @@ export interface HistoryItem {
   id: string;
   action: string;
   entityType: "domain" | "record" | "settings";
+  entityId?: string;
   entityName: string;
+  userId?: string;
   userName?: string;
   userEmail?: string;
   timestamp: string;
   description: string;
+  oldData?: unknown;
+  newData?: unknown;
 }
 
 export interface MiniHostSettings {
