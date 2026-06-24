@@ -53,6 +53,8 @@ enum ProjectApplicationStatus {
   DRAFT
   READY
   LINKED
+  ENVS_APPLIED
+  DEPLOYING
   DEPLOYED
   FAILED
   ARCHIVED
@@ -335,6 +337,17 @@ model ProjectApplication {
   coolifyProjectId              String?
   coolifyApplicationId          String?
   notes                         String?
+  provisionedAt                 DateTime?
+  provisionedBy                 String?
+  lastProvisionStatus           String?
+  lastProvisionMessage          String?
+  envsAppliedAt                 DateTime?
+  lastEnvsApplyStatus           String?
+  lastEnvsApplyMessage          String?
+  lastDeployStartedAt           DateTime?
+  lastDeployStatus              String?
+  lastDeployMessage             String?
+  lastCoolifySyncAt             DateTime?
   createdAt                     DateTime                 @default(now())
   updatedAt                     DateTime                 @updatedAt
   archivedAt                    DateTime?

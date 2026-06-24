@@ -1,8 +1,12 @@
 "use client";
 
-import { Archive, CheckCircle2, Code2, Eye, Link2, Plus, Rocket, Save, Trash2 } from "lucide-react";
+import { Archive, CheckCircle2, Code2, ExternalLink, Eye, Link2, Plus, RefreshCw, Rocket, Save, Settings2, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ApplicationStatusBadge, ApplicationTypeBadge, getApplicationTypeLabel } from "@/components/projects/applications/ApplicationBadges";
+import { ApplyEnvsCoolifyModal } from "@/components/projects/applications/ApplyEnvsCoolifyModal";
+import { CoolifyProvisionChecklist } from "@/components/projects/applications/CoolifyProvisionChecklist";
+import { CreateCoolifyApplicationModal } from "@/components/projects/applications/CreateCoolifyApplicationModal";
+import { DeployCoolifyModal } from "@/components/projects/applications/DeployCoolifyModal";
 import { Badge } from "@/components/ui/Badge";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -10,6 +14,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Notice } from "@/components/ui/Notice";
 import { Toast } from "@/components/ui/Toast";
 import { apiRequest } from "@/lib/api-client";
+import { canShowApplyEnvsButton, canShowCreateInCoolifyButton, canShowDeployButton, buildCoolifyApplicationUrl } from "@/lib/coolify-provision";
 import { formatDateTime, formatRecordValue } from "@/lib/format";
 import type {
   CoolifyApplicationCache,
@@ -33,9 +38,18 @@ interface ProjectApplicationsSectionProps {
 }
 
 type ApplicationsResponse = { applications: ProjectApplication[] };
-type ApplicationResponse = { application: ProjectApplication; message?: string; readiness?: ProjectApplication["readiness"] };
+type ApplicationResponse = {
+  application: ProjectApplication;
+  message?: string;
+  warning?: string;
+  readiness?: ProjectApplication["readiness"];
+};
 type DatabasesResponse = { databases: ProjectDatabase[] };
 type CoolifyResponse = {
+  coolify?: {
+    hasCredential: boolean;
+    baseUrl?: string;
+  };
   servers: CoolifyServerCache[];
   projects: CoolifyProjectCache[];
   applications: CoolifyApplicationCache[];
@@ -76,6 +90,48 @@ function defaultPort(type: ProjectApplicationType) {
   return "";
 }
 
+function applyTypeDefaults(
+  current: ProjectApplicationFormInput,
+  type: ProjectApplicationType
+): ProjectApplicationFormInput {
+  if (type === "STATIC") {
+    return {
+      ...current,
+      type,
+      port: "",
+      startCommand: "",
+      outputDirectory: current.outputDirectory?.trim() ? current.outputDirectory : "/dist",
+      projectDatabaseId: null,
+      buildCommand: current.buildCommand?.trim() ? current.buildCommand : "npm run build"
+    };
+  }
+
+  if (type === "FRONTEND") {
+    return {
+      ...current,
+      type,
+      port: current.port || defaultPort(type),
+      startCommand: "",
+      projectDatabaseId: current.projectDatabaseId || null
+    };
+  }
+
+  return {
+    ...current,
+    type,
+    port: current.port || defaultPort(type)
+  };
+}
+
+function serializeApplicationForm(form: ProjectApplicationFormInput): ProjectApplicationFormInput {
+  return {
+    ...form,
+    projectDatabaseId: form.projectDatabaseId?.trim() ? form.projectDatabaseId.trim() : null,
+    dnsRecordId: form.dnsRecordId?.trim() ? form.dnsRecordId.trim() : null,
+    port: form.port === "" || form.port === null || form.port === undefined ? null : form.port
+  };
+}
+
 function getDomainName(domains: Domain[], domainId: string) {
   return domains.find((domain) => domain.id === domainId)?.name ?? "";
 }
@@ -111,8 +167,8 @@ function createDefaultForm(project: Project, domain = ""): ProjectApplicationFor
     port: "3000",
     domain,
     notes: "",
-    projectDatabaseId: "",
-    dnsRecordId: "",
+    projectDatabaseId: null,
+    dnsRecordId: null,
     environmentVariables: []
   };
 }
@@ -132,8 +188,8 @@ function toForm(application: ProjectApplication): ProjectApplicationFormInput {
     port: application.port ? String(application.port) : "",
     domain: application.domain ?? "",
     notes: application.notes ?? "",
-    projectDatabaseId: application.projectDatabaseId ?? "",
-    dnsRecordId: application.dnsRecordId ?? "",
+    projectDatabaseId: application.projectDatabaseId ?? null,
+    dnsRecordId: application.dnsRecordId ?? null,
     environmentVariables: application.environmentVariables ?? []
   };
 }
@@ -158,6 +214,11 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
+  const [isCreateCoolifyOpen, setIsCreateCoolifyOpen] = useState(false);
+  const [isApplyEnvsOpen, setIsApplyEnvsOpen] = useState(false);
+  const [isDeployCoolifyOpen, setIsDeployCoolifyOpen] = useState(false);
+  const [hasCoolifyCredential, setHasCoolifyCredential] = useState(false);
+  const [coolifyBaseUrl, setCoolifyBaseUrl] = useState<string | undefined>(undefined);
   const [generatedEnv, setGeneratedEnv] = useState<string | null>(null);
   const [generatedWarning, setGeneratedWarning] = useState<string | null>(null);
   const [coolifySelection, setCoolifySelection] = useState({
@@ -206,6 +267,8 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
       setCoolifyServers(coolifyData.servers);
       setCoolifyProjects(coolifyData.projects);
       setCoolifyApplications(coolifyData.applications);
+      setHasCoolifyCredential(Boolean(coolifyData.coolify?.hasCredential));
+      setCoolifyBaseUrl(coolifyData.coolify?.baseUrl);
     } finally {
       setIsLoading(false);
     }
@@ -288,13 +351,20 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
         : `/api/projects/${project.id}/applications`;
       const data = await apiRequest<ApplicationResponse>(endpoint, {
         method: editingApplication ? "PATCH" : "POST",
-        body: JSON.stringify(form)
+        body: JSON.stringify(serializeApplicationForm(form))
       });
 
       setIsFormOpen(false);
       setEditingApplication(null);
       setSelectedApplication(data.application);
-      setToast({ type: "success", message: editingApplication ? "Aplicação atualizada." : "Aplicação planejada criada." });
+      setToast({
+        type: data.warning ? "info" : "success",
+        message: data.warning
+          ? `${editingApplication ? "Aplicação atualizada." : "Aplicação planejada criada."} ${data.warning}`
+          : editingApplication
+            ? "Aplicação atualizada."
+            : "Aplicação planejada criada."
+      });
       await reload();
       onChanged?.();
     } catch (requestError) {
@@ -397,31 +467,6 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
     }
   }
 
-  async function handleReadyCheck() {
-    if (!selectedApplication) {
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      const data = await apiRequest<ApplicationResponse>(
-        `/api/projects/${project.id}/applications/${selectedApplication.id}/ready-check`,
-        { method: "POST" }
-      );
-      setSelectedApplication(data.application);
-      setToast({ type: data.readiness?.ready ? "success" : "info", message: data.message ?? "Validação concluída." });
-      await reload();
-      onChanged?.();
-    } catch (requestError) {
-      setToast({
-        type: "error",
-        message: requestError instanceof Error ? requestError.message : "Não foi possível validar a aplicação."
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   async function handleLinkCoolify() {
     if (!selectedApplication) {
       return;
@@ -455,6 +500,175 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
     }
   }
 
+  async function handleReadyCheck() {
+    if (!selectedApplication) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<ApplicationResponse>(
+        `/api/projects/${project.id}/applications/${selectedApplication.id}/ready-check`,
+        { method: "POST" }
+      );
+      setSelectedApplication(data.application);
+      setToast({ type: data.readiness?.ready ? "success" : "info", message: data.message ?? "Validação concluída." });
+      await reload();
+      onChanged?.();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível validar a aplicação."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleCreateInCoolify(input: {
+    coolifyServerId: string;
+    coolifyProjectId: string;
+    confirmationText: string;
+    applyEnvsAfterCreate: boolean;
+    deployAfterCreate: boolean;
+  }) {
+    if (!selectedApplication) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<ApplicationResponse & { envWarning?: string }>(
+        "/api/coolify/applications/create-public",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            projectApplicationId: selectedApplication.id,
+            coolifyServerId: input.coolifyServerId,
+            coolifyProjectId: input.coolifyProjectId,
+            confirmationText: input.confirmationText,
+            applyEnvsAfterCreate: input.applyEnvsAfterCreate,
+            deployAfterCreate: input.deployAfterCreate
+          })
+        }
+      );
+
+      setSelectedApplication(data.application);
+      setIsCreateCoolifyOpen(false);
+      setToast({
+        type: data.envWarning ? "info" : "success",
+        message: data.envWarning ? `${data.message ?? "Aplicação criada."} ${data.envWarning}` : data.message ?? "Aplicação criada no Coolify com sucesso."
+      });
+      await reload();
+      onChanged?.();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível criar a aplicação no Coolify."
+      });
+      if (selectedApplication) {
+        await refreshSelected(selectedApplication.id).catch(() => undefined);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleApplyEnvs(input: { confirmationText: string }) {
+    if (!selectedApplication) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<ApplicationResponse & { skipped?: boolean }>(
+        "/api/coolify/applications/apply-envs",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            projectApplicationId: selectedApplication.id,
+            confirmationText: input.confirmationText
+          })
+        }
+      );
+
+      setSelectedApplication(data.application);
+      setIsApplyEnvsOpen(false);
+      setToast({
+        type: "success",
+        message: data.message ?? "Variáveis aplicadas no Coolify com sucesso."
+      });
+      await reload();
+      onChanged?.();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível aplicar variáveis no Coolify."
+      });
+      if (selectedApplication) {
+        await refreshSelected(selectedApplication.id).catch(() => undefined);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleDeployCoolify(input: { confirmationText: string }) {
+    if (!selectedApplication) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<ApplicationResponse>("/api/coolify/applications/deploy", {
+        method: "POST",
+        body: JSON.stringify({
+          projectApplicationId: selectedApplication.id,
+          confirmationText: input.confirmationText
+        })
+      });
+
+      setSelectedApplication(data.application);
+      setIsDeployCoolifyOpen(false);
+      setToast({
+        type: "success",
+        message: data.message ?? "Deploy iniciado com sucesso."
+      });
+      await reload();
+      onChanged?.();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível iniciar deploy no Coolify."
+      });
+      if (selectedApplication) {
+        await refreshSelected(selectedApplication.id).catch(() => undefined);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleSyncCoolifyStatus() {
+    try {
+      setIsSubmitting(true);
+      const data = await apiRequest<{ message?: string }>("/api/coolify/sync", { method: "POST" });
+      await reload();
+      if (selectedApplication) {
+        await refreshSelected(selectedApplication.id);
+      }
+      setToast({ type: "success", message: data.message ?? "Coolify sincronizado." });
+      onChanged?.();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível sincronizar o Coolify."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   function updateEnv(index: number, key: keyof ProjectApplicationEnvVar, value: string) {
     const variables = [...(form.environmentVariables ?? [])];
     variables[index] = { ...variables[index], [key]: value };
@@ -470,6 +684,56 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
     : [];
   const hasRemovedCoolifyResource = selectedCoolifyResources.some((resource) => resource?.status === "REMOVED");
   const hasMissingCoolifyResource = selectedCoolifyResources.some((resource) => resource?.status === "MISSING");
+  const createCoolifyEligibility = selectedApplication
+    ? canShowCreateInCoolifyButton({
+        status: selectedApplication.status,
+        type: selectedApplication.type,
+        gitRepository: selectedApplication.gitRepository,
+        gitBranch: selectedApplication.gitBranch,
+        coolifyApplicationId: selectedApplication.coolifyApplication?.id,
+        coolifyServerId: selectedApplication.coolifyServer?.id ?? coolifySelection.serverId,
+        coolifyProjectId: selectedApplication.coolifyProject?.id ?? coolifySelection.projectId,
+        hasCoolifyCredential,
+        hasActiveServer: activeCoolifyServers.length > 0,
+        hasActiveProject: activeCoolifyProjects.length > 0
+      })
+    : { allowed: false, reasons: [] };
+  const applyEnvsEligibility = selectedApplication
+    ? canShowApplyEnvsButton({
+        coolifyApplicationId: selectedApplication.coolifyApplication?.id,
+        coolifyApplicationStatus: selectedApplication.coolifyApplication?.status,
+        coolifyServerStatus: selectedApplication.coolifyServer?.status,
+        coolifyProjectStatus: selectedApplication.coolifyProject?.status,
+        environmentVariableCount:
+          selectedApplication.environmentVariables?.length ??
+          selectedApplication.environmentVariableKeys?.length ??
+          0,
+        applicationStatus: selectedApplication.status
+      })
+    : { allowed: false, reasons: [] };
+  const deployEligibility = selectedApplication
+    ? canShowDeployButton({
+        coolifyApplicationId: selectedApplication.coolifyApplication?.id,
+        coolifyApplicationStatus: selectedApplication.coolifyApplication?.status,
+        coolifyServerStatus: selectedApplication.coolifyServer?.status,
+        coolifyProjectStatus: selectedApplication.coolifyProject?.status,
+        environmentVariableCount:
+          selectedApplication.environmentVariables?.length ??
+          selectedApplication.environmentVariableKeys?.length ??
+          0,
+        applicationStatus: selectedApplication.status
+      })
+    : { allowed: false, reasons: [] };
+  const coolifyOpenUrl =
+    selectedApplication?.coolifyApplication?.coolifyId &&
+    selectedApplication.coolifyProject?.coolifyId &&
+    coolifyBaseUrl
+      ? buildCoolifyApplicationUrl(
+          coolifyBaseUrl,
+          selectedApplication.coolifyProject.coolifyId,
+          selectedApplication.coolifyApplication.coolifyId
+        )
+      : null;
 
   return (
     <section className="rounded-lg border border-zinc-200 bg-white shadow-soft">
@@ -479,7 +743,7 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
         <div>
           <h3 className="text-lg font-semibold text-zinc-950">Aplicações</h3>
           <p className="mt-1 text-sm text-zinc-500">
-            Planeje apps e deploys futuros sem criar recursos reais no Coolify.
+            Planeje apps e crie aplicações reais no Coolify a partir de repositórios públicos.
           </p>
         </div>
         {!isArchivedProject ? (
@@ -496,7 +760,7 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
       </div>
 
       <div className="px-5 py-4">
-        <Notice type="info" message="Esta etapa apenas planeja aplicações. Nenhuma aplicação real é criada no Coolify e nenhum deploy é executado." />
+        <Notice type="info" message="Nesta etapa é possível criar aplicações reais no Coolify apenas com repositório público via HTTPS. Repositórios privados, GitHub App e Deploy Key ficam para etapas futuras." />
       </div>
 
       {isLoading ? (
@@ -620,7 +884,7 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
                 value={form.type}
                 onChange={(event) => {
                   const type = event.target.value as ProjectApplicationType;
-                  setForm((current) => ({ ...current, type, port: current.port || defaultPort(type) }));
+                  setForm((current) => applyTypeDefaults(current, type));
                 }}
                 className={fieldClass}
               >
@@ -655,7 +919,7 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-zinc-700">Output directory</span>
-              <input value={form.outputDirectory ?? ""} onChange={(event) => updateForm("outputDirectory", event.target.value)} className={fieldClass} placeholder="dist ou .next" />
+              <input value={form.outputDirectory ?? ""} onChange={(event) => updateForm("outputDirectory", event.target.value)} className={fieldClass} placeholder={form.type === "STATIC" ? "/dist" : "/dist ou /.next"} />
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-zinc-700">Porta</span>
@@ -740,11 +1004,17 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
                 </div>
               </div>
               <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-normal text-zinc-500">Deploy futuro</p>
+                <p className="text-xs font-semibold uppercase tracking-normal text-zinc-500">Deploy</p>
                 <p className="mt-2 text-sm text-zinc-600">Repo: {selectedApplication.gitRepository || "-"}</p>
                 <p className="mt-1 text-sm text-zinc-600">Branch: {selectedApplication.gitBranch || "-"}</p>
                 <p className="mt-1 text-sm text-zinc-600">Domínio: {selectedApplication.domain || "-"}</p>
                 <p className="mt-1 text-sm text-zinc-600">Porta: {selectedApplication.port ?? "-"}</p>
+                <p className="mt-1 text-sm text-zinc-600">
+                  Provisionamento: {selectedApplication.provisionedAt ? formatDateTime(selectedApplication.provisionedAt) : "-"}
+                </p>
+                {selectedApplication.lastProvisionMessage ? (
+                  <p className="mt-2 text-sm text-zinc-600">{selectedApplication.lastProvisionMessage}</p>
+                ) : null}
               </div>
             </div>
 
@@ -797,17 +1067,79 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h4 className="font-semibold text-zinc-950">Coolify</h4>
-                  <p className="mt-1 text-sm text-zinc-500">Vincule com uma aplicação já sincronizada. Não cria deploy real.</p>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Crie uma aplicação real no Coolify ou vincule com uma aplicação já sincronizada.
+                  </p>
                 </div>
-                {selectedApplication.coolifyApplication ? <Badge variant="success">{selectedApplication.coolifyApplication.name}</Badge> : <Badge>Sem vínculo</Badge>}
+                <div className="flex flex-wrap gap-2">
+                  {selectedApplication.coolifyApplication ? (
+                    <Badge variant="success">{selectedApplication.coolifyApplication.name}</Badge>
+                  ) : (
+                    <Badge>Sem vínculo</Badge>
+                  )}
+                  {coolifyOpenUrl ? (
+                    <a
+                      href={coolifyOpenUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Abrir no Coolify
+                    </a>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void handleSyncCoolifyStatus()}
+                    disabled={isSubmitting || !hasCoolifyCredential}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Sincronizar status
+                  </button>
+                </div>
               </div>
               {selectedApplication.coolifyApplication ? (
-                <div className="mt-4 grid gap-2 text-sm text-zinc-600 md:grid-cols-2">
-                  <p>FQDN: {selectedApplication.coolifyApplication.fqdn || "-"}</p>
-                  <p>Estado local: {selectedApplication.coolifyApplication.status || "-"}</p>
-                  <p>Status remoto: {selectedApplication.coolifyApplication.remoteStatus || "-"}</p>
-                  <p>Repo: {selectedApplication.coolifyApplication.gitRepository || "-"}</p>
-                  <p>Branch: {selectedApplication.coolifyApplication.branch || "-"}</p>
+                <div className="mt-4 space-y-4">
+                  <CoolifyProvisionChecklist application={selectedApplication} />
+                  <div className="grid gap-2 text-sm text-zinc-600 md:grid-cols-2">
+                    <p>Status MiniHost: {selectedApplication.status}</p>
+                    <p>Status Coolify: {selectedApplication.coolifyApplication.remoteStatus || selectedApplication.coolifyApplication.status || "-"}</p>
+                    <p>FQDN: {selectedApplication.coolifyApplication.fqdn || selectedApplication.domain || "-"}</p>
+                    <p>Repositório: {selectedApplication.coolifyApplication.gitRepository || selectedApplication.gitRepository || "-"}</p>
+                    <p>Branch: {selectedApplication.coolifyApplication.branch || selectedApplication.gitBranch || "-"}</p>
+                    <p>Provisionado em: {selectedApplication.provisionedAt ? formatDateTime(selectedApplication.provisionedAt) : "-"}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {applyEnvsEligibility.allowed ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsApplyEnvsOpen(true)}
+                        disabled={isSubmitting}
+                        className="inline-flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Settings2 className="h-4 w-4" />
+                        Aplicar variáveis no Coolify
+                      </button>
+                    ) : null}
+                    {deployEligibility.allowed ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsDeployCoolifyOpen(true)}
+                        disabled={isSubmitting}
+                        className="inline-flex items-center gap-2 rounded-md bg-violet-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Rocket className="h-4 w-4" />
+                        Deploy no Coolify
+                      </button>
+                    ) : null}
+                  </div>
+                  {!applyEnvsEligibility.allowed && selectedApplication.coolifyApplication && (selectedApplication.environmentVariables?.length ?? 0) > 0 && selectedApplication.envsAppliedAt === undefined ? (
+                    <Notice type="info" message="Aplicação criada, mas variáveis ainda não foram aplicadas." />
+                  ) : null}
+                  {!deployEligibility.allowed && selectedApplication.coolifyApplication && !selectedApplication.lastDeployStartedAt ? (
+                    <Notice type="info" message="Aplicação criada, mas deploy ainda não foi iniciado." />
+                  ) : null}
                 </div>
               ) : null}
               {hasRemovedCoolifyResource ? (
@@ -840,9 +1172,27 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
                 </select>
                 <button type="button" onClick={() => void handleLinkCoolify()} disabled={isSubmitting || !coolifySelection.applicationId} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">
                   <Link2 className="h-4 w-4" />
-                  Vincular
+                  Vincular existente
                 </button>
               </div>
+              {!selectedApplication.coolifyApplication && createCoolifyEligibility.allowed ? (
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateCoolifyOpen(true)}
+                    disabled={isSubmitting}
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Rocket className="h-4 w-4" />
+                    Criar no Coolify
+                  </button>
+                </div>
+              ) : null}
+              {!selectedApplication.coolifyApplication && !createCoolifyEligibility.allowed && createCoolifyEligibility.reasons.length > 0 ? (
+                <div className="mt-4">
+                  <Notice type="info" message={createCoolifyEligibility.reasons[0]} />
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
@@ -867,6 +1217,34 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
           </div>
         ) : null}
       </Modal>
+
+      <CreateCoolifyApplicationModal
+        application={selectedApplication ?? undefined}
+        project={project}
+        servers={activeCoolifyServers}
+        projects={activeCoolifyProjects}
+        hasCoolifyCredential={hasCoolifyCredential}
+        isOpen={isCreateCoolifyOpen}
+        isSubmitting={isSubmitting}
+        onClose={() => (isSubmitting ? undefined : setIsCreateCoolifyOpen(false))}
+        onConfirm={(input) => void handleCreateInCoolify(input)}
+      />
+
+      <ApplyEnvsCoolifyModal
+        application={selectedApplication ?? undefined}
+        isOpen={isApplyEnvsOpen}
+        isSubmitting={isSubmitting}
+        onClose={() => (isSubmitting ? undefined : setIsApplyEnvsOpen(false))}
+        onConfirm={(input) => void handleApplyEnvs(input)}
+      />
+
+      <DeployCoolifyModal
+        application={selectedApplication ?? undefined}
+        isOpen={isDeployCoolifyOpen}
+        isSubmitting={isSubmitting}
+        onClose={() => (isSubmitting ? undefined : setIsDeployCoolifyOpen(false))}
+        onConfirm={(input) => void handleDeployCoolify(input)}
+      />
 
       <ConfirmDialog
         isOpen={Boolean(archiveTarget)}

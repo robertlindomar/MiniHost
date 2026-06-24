@@ -13,7 +13,15 @@ export type ProjectDatabaseStatus =
   | "DESTROYED"
   | "PARTIALLY_DESTROYED";
 
-export type ProjectApplicationStatus = "DRAFT" | "READY" | "LINKED" | "DEPLOYED" | "FAILED" | "ARCHIVED";
+export type ProjectApplicationStatus =
+  | "DRAFT"
+  | "READY"
+  | "LINKED"
+  | "ENVS_APPLIED"
+  | "DEPLOYING"
+  | "DEPLOYED"
+  | "FAILED"
+  | "ARCHIVED";
 
 export type ProjectApplicationType =
   | "FRONTEND"
@@ -56,12 +64,14 @@ export interface ProjectApplicationReadiness {
   issues: string[];
   checks: {
     hasName: boolean;
+    hasSlug: boolean;
     hasRepository: boolean;
     hasBranch: boolean;
     hasDomain: boolean;
     hasPort: boolean;
     hasBuildCommand: boolean;
     hasStartCommand: boolean;
+    hasOutputDirectory: boolean;
     hasDatabaseUrl: boolean;
     hasCoolifyLink: boolean;
   };
@@ -97,6 +107,17 @@ export interface ProjectApplication {
   coolifyServer?: CoolifyServerCache;
   coolifyProject?: CoolifyProjectCache;
   coolifyApplication?: CoolifyApplicationCache;
+  provisionedAt?: string;
+  provisionedBy?: string;
+  lastProvisionStatus?: string;
+  lastProvisionMessage?: string;
+  envsAppliedAt?: string;
+  lastEnvsApplyStatus?: string;
+  lastEnvsApplyMessage?: string;
+  lastDeployStartedAt?: string;
+  lastDeployStatus?: string;
+  lastDeployMessage?: string;
+  lastCoolifySyncAt?: string;
 }
 
 export interface ProjectApplicationFormInput {

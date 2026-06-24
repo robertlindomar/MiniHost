@@ -4,6 +4,7 @@ import { writeAudit } from "@/lib/server/audit";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toProjectApplication } from "@/lib/server/mappers";
 import {
+  buildApplicationWithoutDatabaseWarning,
   calculateApplicationReadiness,
   decryptEnvironmentVariables,
   encryptEnvironmentVariables,
@@ -53,7 +54,7 @@ async function validateRelations(projectId: string, input: ReturnType<typeof nor
     });
 
     if (!database) {
-      return "Banco do projeto não encontrado ou indisponível.";
+      return "Banco vinculado não encontrado.";
     }
   }
 
@@ -133,7 +134,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     const envChanged = JSON.stringify(previousEnv) !== JSON.stringify(input.environmentVariables);
     const readiness = calculateApplicationReadiness(
       {
-        ...input,
+        name: input.name,
+        slug: input.slug,
+        type: input.type,
+        gitRepository: input.gitRepository,
+        gitBranch: input.gitBranch,
+        domain: input.domain,
+        port: input.port,
+        buildCommand: input.buildCommand,
+        startCommand: input.startCommand,
+        outputDirectory: input.outputDirectory,
         projectDatabaseId: input.projectDatabaseId,
         coolifyApplicationId: existing.coolifyApplicationId
       },
@@ -200,7 +210,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       return application;
     });
 
-    return ok({ application: toProjectApplication(updated, { includeEnvironmentValues: true }) });
+    return ok({
+      application: toProjectApplication(updated, { includeEnvironmentValues: true }),
+      warning: buildApplicationWithoutDatabaseWarning(input.type, input.projectDatabaseId)
+    });
   } catch (error) {
     return handleRouteError(error);
   }

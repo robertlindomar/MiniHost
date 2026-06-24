@@ -17,9 +17,9 @@ export async function GET(request: Request) {
       removedCoolifyResourcesCount,
       brokenCoolifyProjectLinksCount,
       plannedApplicationsCount,
-      readyApplicationsCount,
       linkedApplicationsCount,
-      applicationsWithoutDomainCount
+      failedApplicationsCount,
+      pendingCoolifyApplicationsCount
     ] = await Promise.all([
       prisma.domain.findMany({ orderBy: { createdAt: "desc" } }),
       prisma.dnsRecord.findMany({
@@ -95,18 +95,22 @@ export async function GET(request: Request) {
         where: { status: { not: "ARCHIVED" } }
       }),
       prisma.projectApplication.count({
-        where: { status: "READY" }
-      }),
-      prisma.projectApplication.count({
         where: {
-          status: { not: "ARCHIVED" },
+          status: { in: ["LINKED", "ENVS_APPLIED", "DEPLOYING", "DEPLOYED"] },
           coolifyApplicationId: { not: null }
         }
       }),
       prisma.projectApplication.count({
         where: {
-          status: { not: "ARCHIVED" },
-          OR: [{ domain: null }, { domain: "" }]
+          status: "FAILED",
+          archivedAt: null
+        }
+      }),
+      prisma.projectApplication.count({
+        where: {
+          status: { in: ["READY", "DRAFT", "FAILED"] },
+          coolifyApplicationId: null,
+          archivedAt: null
         }
       })
     ]);
@@ -125,9 +129,9 @@ export async function GET(request: Request) {
       },
       applicationSummary: {
         planned: plannedApplicationsCount,
-        ready: readyApplicationsCount,
         linkedToCoolify: linkedApplicationsCount,
-        withoutDomain: applicationsWithoutDomainCount
+        failedProvision: failedApplicationsCount,
+        pendingCoolifyCreation: pendingCoolifyApplicationsCount
       }
     });
   } catch (error) {

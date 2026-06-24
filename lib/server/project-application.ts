@@ -26,6 +26,8 @@ const GIT_APP_TYPES = new Set<ProjectApplicationType>([
   "OTHER"
 ]);
 
+const TYPES_SUGGESTING_DATABASE = new Set<ProjectApplicationType>(["BACKEND", "FULLSTACK"]);
+
 export function slugifyApplicationName(value: string) {
   return value
     .trim()
@@ -164,10 +166,16 @@ export function sanitizeEnvVariablesForAudit(variables: ProjectApplicationEnvVar
   }));
 }
 
+function nullIfEmpty(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export function calculateApplicationReadiness(
   application: Pick<
     ProjectApplication,
     | "name"
+    | "slug"
     | "type"
     | "gitRepository"
     | "gitBranch"
@@ -175,6 +183,7 @@ export function calculateApplicationReadiness(
     | "port"
     | "buildCommand"
     | "startCommand"
+    | "outputDirectory"
     | "projectDatabaseId"
     | "coolifyApplicationId"
   >,
@@ -182,19 +191,18 @@ export function calculateApplicationReadiness(
 ): ProjectApplicationReadiness {
   const type = application.type;
   const requiresGit = GIT_APP_TYPES.has(type);
-  const requiresPort = type === "BACKEND" || type === "FULLSTACK";
-  const requiresBuild = type === "FRONTEND" || type === "FULLSTACK" || type === "STATIC";
-  const requiresStart = type === "BACKEND" || type === "FULLSTACK" || type === "DOCKERFILE";
   const hasDatabaseUrl = variables.some((variable) => variable.key === "DATABASE_URL" && variable.value.trim());
 
   const checks = {
     hasName: Boolean(application.name.trim()),
+    hasSlug: Boolean(application.slug.trim()),
     hasRepository: !requiresGit || Boolean(application.gitRepository?.trim()),
     hasBranch: !requiresGit || Boolean(application.gitBranch?.trim()),
     hasDomain: Boolean(application.domain?.trim()),
-    hasPort: !requiresPort || Boolean(application.port && application.port > 0),
-    hasBuildCommand: !requiresBuild || Boolean(application.buildCommand?.trim()),
-    hasStartCommand: !requiresStart || Boolean(application.startCommand?.trim()),
+    hasPort: Boolean(application.port && application.port > 0),
+    hasBuildCommand: Boolean(application.buildCommand?.trim()),
+    hasStartCommand: Boolean(application.startCommand?.trim()),
+    hasOutputDirectory: Boolean(application.outputDirectory?.trim()),
     hasDatabaseUrl: !application.projectDatabaseId || Boolean(hasDatabaseUrl),
     hasCoolifyLink: Boolean(application.coolifyApplicationId)
   };
@@ -205,6 +213,10 @@ export function calculateApplicationReadiness(
     issues.push("Informe o nome da aplicação.");
   }
 
+  if (!checks.hasSlug) {
+    issues.push("Informe um slug válido para a aplicação.");
+  }
+
   if (!checks.hasRepository) {
     issues.push("Informe o repositório Git.");
   }
@@ -213,19 +225,54 @@ export function calculateApplicationReadiness(
     issues.push("Informe a branch Git.");
   }
 
-  if (!checks.hasPort) {
-    issues.push("Informe a porta da aplicação.");
+  switch (type) {
+    case "STATIC":
+      if (!checks.hasBuildCommand) {
+        issues.push("Informe o build command.");
+      }
+
+      if (!checks.hasOutputDirectory) {
+        issues.push("Informe o output directory.");
+      }
+
+      break;
+    case "FRONTEND":
+      if (!checks.hasBuildCommand) {
+        issues.push("Informe o build command.");
+      }
+
+      break;
+    case "BACKEND":
+      if (!checks.hasPort && !checks.hasStartCommand) {
+        issues.push("Informe a porta ou o start command.");
+      }
+
+      break;
+    case "FULLSTACK":
+      if (!checks.hasBuildCommand) {
+        issues.push("Informe o build command.");
+      }
+
+      if (!checks.hasStartCommand) {
+        issues.push("Informe o start command.");
+      }
+
+      if (!checks.hasPort) {
+        issues.push("Informe a porta da aplicação.");
+      }
+
+      break;
+    case "DOCKERFILE":
+      if (!checks.hasStartCommand) {
+        issues.push("Informe o start command.");
+      }
+
+      break;
+    default:
+      break;
   }
 
-  if (!checks.hasBuildCommand) {
-    issues.push("Informe o build command.");
-  }
-
-  if (!checks.hasStartCommand) {
-    issues.push("Informe o start command.");
-  }
-
-  if (!checks.hasDatabaseUrl) {
+  if (application.projectDatabaseId && !checks.hasDatabaseUrl) {
     issues.push("Importe as variáveis do banco para configurar DATABASE_URL.");
   }
 
@@ -234,6 +281,14 @@ export function calculateApplicationReadiness(
     issues,
     checks
   };
+}
+
+export function buildApplicationWithoutDatabaseWarning(type: ProjectApplicationType, projectDatabaseId?: string | null) {
+  if (projectDatabaseId || !TYPES_SUGGESTING_DATABASE.has(type)) {
+    return undefined;
+  }
+
+  return "Esta aplicação não possui banco vinculado.";
 }
 
 export function normalizeProjectApplicationInput(input: Partial<ProjectApplicationFormInput>) {
@@ -246,18 +301,18 @@ export function normalizeProjectApplicationInput(input: Partial<ProjectApplicati
     name,
     slug,
     type,
-    gitRepository: input.gitRepository?.trim() || null,
-    gitBranch: input.gitBranch?.trim() || (type === "DOCKER_COMPOSE" ? null : "main"),
-    rootDirectory: input.rootDirectory?.trim() || null,
-    buildCommand: input.buildCommand?.trim() || null,
-    startCommand: input.startCommand?.trim() || null,
-    installCommand: input.installCommand?.trim() || null,
-    outputDirectory: input.outputDirectory?.trim() || null,
+    gitRepository: nullIfEmpty(input.gitRepository),
+    gitBranch: nullIfEmpty(input.gitBranch) || (type === "DOCKER_COMPOSE" ? null : "main"),
+    rootDirectory: nullIfEmpty(input.rootDirectory),
+    buildCommand: nullIfEmpty(input.buildCommand),
+    startCommand: nullIfEmpty(input.startCommand),
+    installCommand: nullIfEmpty(input.installCommand),
+    outputDirectory: nullIfEmpty(input.outputDirectory),
     port: Number.isFinite(rawPort) && rawPort && rawPort > 0 ? rawPort : null,
     domain: input.domain?.trim().toLowerCase() || null,
-    notes: input.notes?.trim() || null,
-    projectDatabaseId: input.projectDatabaseId?.trim() || null,
-    dnsRecordId: input.dnsRecordId?.trim() || null,
+    notes: nullIfEmpty(input.notes),
+    projectDatabaseId: nullIfEmpty(input.projectDatabaseId),
+    dnsRecordId: nullIfEmpty(input.dnsRecordId),
     environmentVariables: normalizeEnvVariables(input.environmentVariables ?? [])
   };
 }

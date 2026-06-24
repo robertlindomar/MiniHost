@@ -5,6 +5,8 @@ const statusConfig: Record<ProjectApplicationStatus, { label: string; variant: "
   DRAFT: { label: "Rascunho", variant: "muted" },
   READY: { label: "Pronta", variant: "success" },
   LINKED: { label: "Vinculada", variant: "info" },
+  ENVS_APPLIED: { label: "Envs aplicadas", variant: "info" },
+  DEPLOYING: { label: "Em deploy", variant: "warning" },
   DEPLOYED: { label: "Deploy feito", variant: "success" },
   FAILED: { label: "Falha", variant: "danger" },
   ARCHIVED: { label: "Arquivada", variant: "warning" }

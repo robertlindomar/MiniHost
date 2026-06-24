@@ -108,7 +108,15 @@ export function toProject(project: ProjectWithCount): Project {
 }
 
 export function toProjectApplicationStatus(status: string): ProjectApplicationStatus {
-  if (status === "READY" || status === "LINKED" || status === "DEPLOYED" || status === "FAILED" || status === "ARCHIVED") {
+  if (
+    status === "READY" ||
+    status === "LINKED" ||
+    status === "ENVS_APPLIED" ||
+    status === "DEPLOYING" ||
+    status === "DEPLOYED" ||
+    status === "FAILED" ||
+    status === "ARCHIVED"
+  ) {
     return status;
   }
 
@@ -172,7 +180,18 @@ export function toProjectApplication(
     dnsRecord: application.dnsRecord ? toDnsRecord(application.dnsRecord) : undefined,
     coolifyServer: application.coolifyServer ? toCoolifyServer(application.coolifyServer) : undefined,
     coolifyProject: application.coolifyProject ? toCoolifyProject(application.coolifyProject) : undefined,
-    coolifyApplication: application.coolifyApplication ? toCoolifyApplication(application.coolifyApplication) : undefined
+    coolifyApplication: application.coolifyApplication ? toCoolifyApplication(application.coolifyApplication) : undefined,
+    provisionedAt: application.provisionedAt?.toISOString(),
+    provisionedBy: application.provisionedBy ?? undefined,
+    lastProvisionStatus: application.lastProvisionStatus ?? undefined,
+    lastProvisionMessage: application.lastProvisionMessage ?? undefined,
+    envsAppliedAt: application.envsAppliedAt?.toISOString(),
+    lastEnvsApplyStatus: application.lastEnvsApplyStatus ?? undefined,
+    lastEnvsApplyMessage: application.lastEnvsApplyMessage ?? undefined,
+    lastDeployStartedAt: application.lastDeployStartedAt?.toISOString(),
+    lastDeployStatus: application.lastDeployStatus ?? undefined,
+    lastDeployMessage: application.lastDeployMessage ?? undefined,
+    lastCoolifySyncAt: application.lastCoolifySyncAt?.toISOString()
   };
 
   return options.includeEnvironmentValues

@@ -4,6 +4,18 @@ export function buildProvisionConfirmationText(databaseName: string) {
   return `criar banco ${databaseName.trim().toLowerCase()}`;
 }
 
+export function buildApplicationProvisionConfirmationText(slug: string) {
+  return `criar app ${slug.trim().toLowerCase()}`;
+}
+
+export function buildApplyEnvsConfirmationText(slug: string) {
+  return `aplicar envs ${slug.trim().toLowerCase()}`;
+}
+
+export function buildDeployConfirmationText(slug: string) {
+  return `deploy ${slug.trim().toLowerCase()}`;
+}
+
 export function buildFixPermissionsConfirmationText(databaseName: string) {
   return `corrigir permissoes ${databaseName.trim().toLowerCase()}`;
 }

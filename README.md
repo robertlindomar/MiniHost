@@ -2,12 +2,73 @@
 
 MiniHost é um painel web para organizar domínios, registros DNS, projetos, bancos PostgreSQL e recursos Coolify da sua VPS.
 
-Hoje o painel integra com PostgreSQL (metadados e provisionamento real), Cloudflare (sincronização e CRUD de DNS) e Coolify em modo somente leitura. O objetivo futuro é evoluir para deploy automatizado com Coolify.
+Hoje o painel integra com PostgreSQL (metadados e provisionamento real), Cloudflare (sincronização e CRUD de DNS) e Coolify (sincronização de recursos e criação de aplicações a partir de repositórios públicos). O objetivo futuro é evoluir para deploy automatizado completo com repositórios privados e ações destrutivas controladas.
+
+## Etapa 14 implementada
+
+- Criação de aplicação **real** no Coolify a partir de uma `ProjectApplication` planejada.
+- Suporte apenas a **repositório público via HTTPS** nesta etapa.
+- Serviço `createPublicRepositoryApplication()` em `lib/coolify.ts` usando `POST /api/v1/applications/public`.
+- Pós-provisionamento em etapas separadas:
+  - `updateApplicationEnvs()` — `PATCH /api/v1/applications/{uuid}/envs/bulk`
+  - `deployApplication()` — `GET /api/v1/deploy?uuid=...`
+- Rotas protegidas:
+  - `POST /api/coolify/applications/create-public` — confirmação `criar app slug-da-aplicacao`
+  - `POST /api/coolify/applications/apply-envs` — confirmação `aplicar envs slug-da-aplicacao`
+  - `POST /api/coolify/applications/deploy` — confirmação `deploy slug-da-aplicacao`
+- Modal de criação com opções opcionais (desmarcadas por padrão): **Aplicar envs após criar** e **Iniciar deploy após criar**.
+- Checklist visual na tela de detalhes: aplicação criada, variáveis aplicadas, deploy iniciado e última sincronização.
+- Botões na tela de detalhes: **Criar no Coolify**, **Aplicar variáveis no Coolify**, **Deploy no Coolify**, **Abrir no Coolify** e **Sincronizar status**.
+- Status local após criação: sempre `LINKED` (não `DEPLOYED` automaticamente).
+- Novos status: `ENVS_APPLIED` e `DEPLOYING`.
+- Novos campos em `ProjectApplication`: `envsAppliedAt`, `lastEnvsApplyStatus`, `lastEnvsApplyMessage`, `lastDeployStartedAt`, `lastDeployStatus`, `lastDeployMessage`, `lastCoolifySyncAt`.
+- Dashboard atualizado com cards de apps vinculados, com erro de provisionamento e pendentes de criação no Coolify.
+- AuditLog:
+  - `COOLIFY_APPLICATION_CREATE_START`
+  - `COOLIFY_APPLICATION_CREATE_SUCCESS`
+  - `COOLIFY_APPLICATION_CREATE_FAILED`
+  - `COOLIFY_APPLICATION_ENVS_APPLY_START`
+  - `COOLIFY_APPLICATION_ENVS_APPLY_SUCCESS`
+  - `COOLIFY_APPLICATION_ENVS_APPLY_FAILED`
+  - `COOLIFY_APPLICATION_DEPLOY_START`
+  - `COOLIFY_APPLICATION_DEPLOY_SUCCESS`
+  - `COOLIFY_APPLICATION_DEPLOY_FAILED`
+  - `PROJECT_APPLICATION_PROVISIONED_COOLIFY`
+
+**Importante:** criar a aplicação no Coolify **não significa deploy automático**. O fluxo recomendado é: (1) criar app, (2) aplicar envs, (3) iniciar deploy, (4) sincronizar status. Esta etapa **não suporta repositório privado**, **GitHub App** nem **Deploy Key**. Também **não exclui, para ou reinicia** recursos no Coolify. O token Coolify e valores sensíveis **nunca** aparecem no frontend, logs ou AuditLog.
+
+### Fluxo completo no Coolify
+
+1. Configure URL e token do Coolify em **Configurações** e teste a conexão.
+2. Sincronize recursos na página **Coolify**.
+3. No projeto MiniHost, planeje uma aplicação com repositório público HTTPS, branch, domínio e comandos de build.
+4. Para apps **STATIC**: banco é opcional, `DATABASE_URL` não é obrigatória, start command e porta podem ficar vazios; `build command` e `output directory` (ex.: `/dist`) são obrigatórios.
+5. Abra **Ver detalhes** e clique em **Criar no Coolify**.
+6. Revise o preview, confirme com `criar app slug-da-aplicacao` e crie. A aplicação ficará com status `LINKED`.
+7. Se houver variáveis planejadas, clique em **Aplicar variáveis no Coolify** e confirme com `aplicar envs slug-da-aplicacao`.
+8. Clique em **Deploy no Coolify** e confirme com `deploy slug-da-aplicacao`.
+9. Use **Sincronizar status** para atualizar o cache e o status exibido no MiniHost.
+
+Opcionalmente, no modal de criação, marque **Aplicar envs após criar** e/ou **Iniciar deploy após criar** para executar o fluxo completo em uma única ação.
+
+### Limitações desta etapa
+
+- Somente repositório público via HTTPS.
+- Repositório privado, GitHub App e Deploy Key ficam para etapa futura.
+- Não há exclusão, parada ou restart de aplicações no Coolify.
+
+### Teste recomendado com repositório estático público
+
+1. Crie um projeto de teste no MiniHost.
+2. Planeje uma aplicação tipo **STATIC** apontando para um repositório público simples (ex.: site Vite/React com `npm run build` e output `/dist`).
+3. Não vincule banco e deixe variáveis vazias — apps Static podem funcionar sem envs.
+4. Crie a aplicação no Coolify, aplique envs (se houver) e inicie o deploy.
+5. Clique em **Sincronizar status** e verifique o checklist e o status na página Coolify.
 
 ## Etapa 13 implementada
 
 - Model `ProjectApplication` no Prisma para planejar aplicações/deploys por projeto.
-- Status de aplicação: `DRAFT`, `READY`, `LINKED`, `DEPLOYED`, `FAILED` e `ARCHIVED`.
+- Status de aplicação: `DRAFT`, `READY`, `LINKED`, `ENVS_APPLIED`, `DEPLOYING`, `DEPLOYED`, `FAILED` e `ARCHIVED`.
 - Tipos de aplicação: `FRONTEND`, `BACKEND`, `FULLSTACK`, `STATIC`, `DOCKERFILE`, `DOCKER_COMPOSE` e `OTHER`.
 - Nova seção **Aplicações** dentro dos detalhes do projeto.
 - Criar, editar, ver detalhes e arquivar aplicações planejadas.
@@ -591,11 +652,13 @@ Os testes E2E usam Playwright e cobrem login, logout, proteção de rotas, naveg
 
 ## Próximas etapas sugeridas
 
-1. Implementar criação assistida de aplicações reais no Coolify com confirmação explícita.
-2. Criar templates de deploy por tipo de aplicação.
-3. Melhorar comparação antes/depois da sincronização DNS.
-4. Backup e restauração de bancos PostgreSQL por projeto.
+1. Suportar repositórios privados no Coolify (GitHub App e Deploy Key).
+2. Configurar variáveis de ambiente no Coolify após a criação da aplicação.
+3. Implementar ações controladas no Coolify (stop, restart, deploy manual) com confirmação forte.
+4. Criar templates de deploy por tipo de aplicação.
+5. Melhorar comparação antes/depois da sincronização DNS.
+6. Backup e restauração de bancos PostgreSQL por projeto.
 
 ## Observação
 
-O MiniHost já provisiona e desprovisiona bancos PostgreSQL reais (com confirmação forte), sincroniza e edita DNS na Cloudflare, lista recursos Coolify em modo leitura, planeja aplicações por projeto e mantém histórico/auditoria no PostgreSQL. Criação real de aplicações e deploy automatizado via Coolify ainda não foram implementados.
+O MiniHost já provisiona e desprovisiona bancos PostgreSQL reais (com confirmação forte), sincroniza e edita DNS na Cloudflare, sincroniza recursos Coolify, cria aplicações reais no Coolify a partir de repositórios públicos (com confirmação forte), planeja aplicações por projeto e mantém histórico/auditoria no PostgreSQL. Repositórios privados, envs automáticas no Coolify e ações destrutivas ainda não foram implementados.

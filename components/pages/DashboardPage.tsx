@@ -28,9 +28,9 @@ interface DashboardResponse {
   };
   applicationSummary?: {
     planned: number;
-    ready: number;
     linkedToCoolify: number;
-    withoutDomain: number;
+    failedProvision: number;
+    pendingCoolifyCreation: number;
   };
 }
 
@@ -48,9 +48,9 @@ export function DashboardPage() {
   });
   const [applicationSummary, setApplicationSummary] = useState({
     planned: 0,
-    ready: 0,
     linkedToCoolify: 0,
-    withoutDomain: 0
+    failedProvision: 0,
+    pendingCoolifyCreation: 0
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,9 +76,9 @@ export function DashboardPage() {
         setApplicationSummary(
           data.applicationSummary ?? {
             planned: 0,
-            ready: 0,
             linkedToCoolify: 0,
-            withoutDomain: 0
+            failedProvision: 0,
+            pendingCoolifyCreation: 0
           }
         );
         setError(null);
@@ -263,27 +263,27 @@ export function DashboardPage() {
           isLoading={isLoading}
         />
         <StatCard
-          title="Aplicações prontas"
-          value={applicationSummary.ready}
-          description="Apps prontos para provisionamento futuro"
-          icon={<ShieldCheck className="h-5 w-5" />}
-          tone="emerald"
-          isLoading={isLoading}
-        />
-        <StatCard
           title="Apps vinculados ao Coolify"
           value={applicationSummary.linkedToCoolify}
-          description="Aplicações planejadas com vínculo local"
+          description="Aplicações criadas ou vinculadas no Coolify"
           icon={<Rocket className="h-5 w-5" />}
           tone="violet"
           isLoading={isLoading}
         />
         <StatCard
-          title="Apps sem domínio"
-          value={applicationSummary.withoutDomain}
-          description="Aplicações sem domínio definido"
-          icon={<Globe2 className="h-5 w-5" />}
+          title="Apps com erro de provisionamento"
+          value={applicationSummary.failedProvision}
+          description="Falha ao criar aplicação no Coolify"
+          icon={<Server className="h-5 w-5" />}
           tone="amber"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Apps pendentes no Coolify"
+          value={applicationSummary.pendingCoolifyCreation}
+          description="Ainda sem aplicação real no Coolify"
+          icon={<ShieldCheck className="h-5 w-5" />}
+          tone="emerald"
           isLoading={isLoading}
         />
       </section>

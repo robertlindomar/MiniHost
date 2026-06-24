@@ -4,6 +4,7 @@ import { writeAudit } from "@/lib/server/audit";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toProjectApplication } from "@/lib/server/mappers";
 import {
+  buildApplicationWithoutDatabaseWarning,
   calculateApplicationReadiness,
   encryptEnvironmentVariables,
   normalizeProjectApplicationInput,
@@ -59,7 +60,7 @@ async function validateRelations(projectId: string, input: ReturnType<typeof nor
     });
 
     if (!database) {
-      return "Banco do projeto não encontrado ou indisponível.";
+      return "Banco vinculado não encontrado.";
     }
   }
 
@@ -138,7 +139,16 @@ export async function POST(request: Request, context: RouteContext) {
 
     const readiness = calculateApplicationReadiness(
       {
-        ...input,
+        name: input.name,
+        slug: input.slug,
+        type: input.type,
+        gitRepository: input.gitRepository,
+        gitBranch: input.gitBranch,
+        domain: input.domain,
+        port: input.port,
+        buildCommand: input.buildCommand,
+        startCommand: input.startCommand,
+        outputDirectory: input.outputDirectory,
         projectDatabaseId: input.projectDatabaseId,
         coolifyApplicationId: null
       },
@@ -195,7 +205,13 @@ export async function POST(request: Request, context: RouteContext) {
       return application;
     });
 
-    return ok({ application: toProjectApplication(created, { includeEnvironmentValues: true }) }, { status: 201 });
+    return ok(
+      {
+        application: toProjectApplication(created, { includeEnvironmentValues: true }),
+        warning: buildApplicationWithoutDatabaseWarning(input.type, input.projectDatabaseId)
+      },
+      { status: 201 }
+    );
   } catch (error) {
     if (error instanceof Error && error.message.includes("projeto arquivado")) {
       return fail(error.message, 400);
