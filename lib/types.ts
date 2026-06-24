@@ -13,6 +13,17 @@ export type ProjectDatabaseStatus =
   | "DESTROYED"
   | "PARTIALLY_DESTROYED";
 
+export type ProjectApplicationStatus = "DRAFT" | "READY" | "LINKED" | "DEPLOYED" | "FAILED" | "ARCHIVED";
+
+export type ProjectApplicationType =
+  | "FRONTEND"
+  | "BACKEND"
+  | "FULLSTACK"
+  | "STATIC"
+  | "DOCKERFILE"
+  | "DOCKER_COMPOSE"
+  | "OTHER";
+
 export type DnsRecordStatus = EntityStatus | "DELETED";
 
 export type DnsRecordType = "A" | "AAAA" | "CNAME" | "TXT" | "MX";
@@ -31,7 +42,80 @@ export interface Project {
   archivedAt?: string;
   recordCount?: number;
   databaseCount?: number;
+  applicationCount?: number;
   coolifyLink?: ProjectCoolifyLink;
+}
+
+export interface ProjectApplicationEnvVar {
+  key: string;
+  value: string;
+}
+
+export interface ProjectApplicationReadiness {
+  ready: boolean;
+  issues: string[];
+  checks: {
+    hasName: boolean;
+    hasRepository: boolean;
+    hasBranch: boolean;
+    hasDomain: boolean;
+    hasPort: boolean;
+    hasBuildCommand: boolean;
+    hasStartCommand: boolean;
+    hasDatabaseUrl: boolean;
+    hasCoolifyLink: boolean;
+  };
+}
+
+export interface ProjectApplication {
+  id: string;
+  projectId: string;
+  projectDatabaseId?: string;
+  dnsRecordId?: string;
+  name: string;
+  slug: string;
+  type: ProjectApplicationType;
+  status: ProjectApplicationStatus;
+  gitRepository?: string;
+  gitBranch?: string;
+  rootDirectory?: string;
+  buildCommand?: string;
+  startCommand?: string;
+  installCommand?: string;
+  outputDirectory?: string;
+  port?: number;
+  domain?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  environmentVariables?: ProjectApplicationEnvVar[];
+  environmentVariableKeys?: string[];
+  readiness?: ProjectApplicationReadiness;
+  projectDatabase?: ProjectDatabase;
+  dnsRecord?: DnsRecord;
+  coolifyServer?: CoolifyServerCache;
+  coolifyProject?: CoolifyProjectCache;
+  coolifyApplication?: CoolifyApplicationCache;
+}
+
+export interface ProjectApplicationFormInput {
+  name: string;
+  slug?: string;
+  type: ProjectApplicationType;
+  gitRepository?: string;
+  gitBranch?: string;
+  rootDirectory?: string;
+  buildCommand?: string;
+  startCommand?: string;
+  installCommand?: string;
+  outputDirectory?: string;
+  port?: number | string | null;
+  domain?: string;
+  notes?: string;
+  projectDatabaseId?: string | null;
+  dnsRecordId?: string | null;
+  environmentVariables?: ProjectApplicationEnvVar[];
 }
 
 export interface ProjectDatabase {
@@ -119,7 +203,7 @@ export interface DnsRecord {
 export interface HistoryItem {
   id: string;
   action: string;
-  entityType: "domain" | "record" | "settings" | "project" | "project_database" | "coolify";
+  entityType: "domain" | "record" | "settings" | "project" | "project_database" | "project_application" | "coolify";
   entityId?: string;
   entityName: string;
   userId?: string;
@@ -192,13 +276,20 @@ export interface CoolifyCredentialFormInput {
   token?: string;
 }
 
+export type CoolifyCacheStatus = "ACTIVE" | "MISSING" | "REMOVED" | "ERROR";
+
 export interface CoolifyServerCache {
   id: string;
   coolifyId: string;
   name: string;
   description?: string;
-  status?: string;
+  status: CoolifyCacheStatus;
+  remoteStatus?: string;
   ip?: string;
+  isActive: boolean;
+  lastSeenAt?: string;
+  missingSince?: string;
+  removedAt?: string;
   lastSyncedAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -209,6 +300,12 @@ export interface CoolifyProjectCache {
   coolifyId: string;
   name: string;
   description?: string;
+  status: CoolifyCacheStatus;
+  remoteStatus?: string;
+  isActive: boolean;
+  lastSeenAt?: string;
+  missingSince?: string;
+  removedAt?: string;
   lastSyncedAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -219,9 +316,14 @@ export interface CoolifyApplicationCache {
   coolifyId: string;
   name: string;
   fqdn?: string;
-  status?: string;
+  status: CoolifyCacheStatus;
+  remoteStatus?: string;
   gitRepository?: string;
   branch?: string;
+  isActive: boolean;
+  lastSeenAt?: string;
+  missingSince?: string;
+  removedAt?: string;
   lastSyncedAt?: string;
   createdAt: string;
   updatedAt: string;

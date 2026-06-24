@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock3, Database, FolderKanban, Globe2, Link2Off, Rocket, Server, ShieldCheck } from "lucide-react";
+import { Clock3, Database, FolderKanban, Globe2, Layers3, Link2Off, Rocket, Server, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { QuickTemplatesCard } from "@/components/dashboard/QuickTemplatesCard";
@@ -21,9 +21,16 @@ interface DashboardResponse {
   databases: ProjectDatabase[];
   history: HistoryItem[];
   coolifySummary?: {
-    applications: number;
-    linkedProjects: number;
-    unlinkedProjects: number;
+    activeResources: number;
+    missingResources: number;
+    removedResources: number;
+    brokenProjectLinks: number;
+  };
+  applicationSummary?: {
+    planned: number;
+    ready: number;
+    linkedToCoolify: number;
+    withoutDomain: number;
   };
 }
 
@@ -34,9 +41,16 @@ export function DashboardPage() {
   const [databases, setDatabases] = useState<ProjectDatabase[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [coolifySummary, setCoolifySummary] = useState({
-    applications: 0,
-    linkedProjects: 0,
-    unlinkedProjects: 0
+    activeResources: 0,
+    missingResources: 0,
+    removedResources: 0,
+    brokenProjectLinks: 0
+  });
+  const [applicationSummary, setApplicationSummary] = useState({
+    planned: 0,
+    ready: 0,
+    linkedToCoolify: 0,
+    withoutDomain: 0
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,9 +67,18 @@ export function DashboardPage() {
         setHistory(data.history);
         setCoolifySummary(
           data.coolifySummary ?? {
-            applications: 0,
-            linkedProjects: 0,
-            unlinkedProjects: 0
+            activeResources: 0,
+            missingResources: 0,
+            removedResources: 0,
+            brokenProjectLinks: 0
+          }
+        );
+        setApplicationSummary(
+          data.applicationSummary ?? {
+            planned: 0,
+            ready: 0,
+            linkedToCoolify: 0,
+            withoutDomain: 0
           }
         );
         setError(null);
@@ -230,27 +253,70 @@ export function DashboardPage() {
         />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Apps Coolify sincronizadas"
-          value={coolifySummary.applications}
-          description="Aplicações em cache local"
+          title="Aplicações planejadas"
+          value={applicationSummary.planned}
+          description="Apps configurados dentro dos projetos"
+          icon={<Layers3 className="h-5 w-5" />}
+          tone="blue"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Aplicações prontas"
+          value={applicationSummary.ready}
+          description="Apps prontos para provisionamento futuro"
+          icon={<ShieldCheck className="h-5 w-5" />}
+          tone="emerald"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Apps vinculados ao Coolify"
+          value={applicationSummary.linkedToCoolify}
+          description="Aplicações planejadas com vínculo local"
+          icon={<Rocket className="h-5 w-5" />}
+          tone="violet"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Apps sem domínio"
+          value={applicationSummary.withoutDomain}
+          description="Aplicações sem domínio definido"
+          icon={<Globe2 className="h-5 w-5" />}
+          tone="amber"
+          isLoading={isLoading}
+        />
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Recursos Coolify ativos"
+          value={coolifySummary.activeResources}
+          description="Servidores, projetos e aplicações encontrados"
           icon={<Rocket className="h-5 w-5" />}
           tone="emerald"
           isLoading={isLoading}
         />
         <StatCard
-          title="Projetos vinculados ao Coolify"
-          value={coolifySummary.linkedProjects}
-          description="Projetos MiniHost com vínculo Coolify"
+          title="Recursos Coolify ausentes"
+          value={coolifySummary.missingResources}
+          description="Não vieram na última sincronização"
           icon={<FolderKanban className="h-5 w-5" />}
-          tone="blue"
+          tone="amber"
           isLoading={isLoading}
         />
         <StatCard
-          title="Projetos sem vínculo Coolify"
-          value={coolifySummary.unlinkedProjects}
-          description="Projetos ativos sem associação Coolify"
+          title="Recursos Coolify removidos"
+          value={coolifySummary.removedResources}
+          description="Mantidos apenas no histórico local"
+          icon={<Link2Off className="h-5 w-5" />}
+          tone="violet"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Projetos com vínculo quebrado"
+          value={coolifySummary.brokenProjectLinks}
+          description="Projetos MiniHost vinculados a recurso ausente/removido"
           icon={<Link2Off className="h-5 w-5" />}
           tone="amber"
           isLoading={isLoading}

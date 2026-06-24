@@ -12,9 +12,14 @@ export async function GET(request: Request) {
       projects,
       databases,
       history,
-      coolifyApplicationsCount,
-      linkedCoolifyProjectsCount,
-      unlinkedCoolifyProjectsCount
+      activeCoolifyResourcesCount,
+      missingCoolifyResourcesCount,
+      removedCoolifyResourcesCount,
+      brokenCoolifyProjectLinksCount,
+      plannedApplicationsCount,
+      readyApplicationsCount,
+      linkedApplicationsCount,
+      applicationsWithoutDomainCount
     ] = await Promise.all([
       prisma.domain.findMany({ orderBy: { createdAt: "desc" } }),
       prisma.dnsRecord.findMany({
@@ -46,17 +51,62 @@ export async function GET(request: Request) {
       }),
       prisma.projectDatabase.findMany({ orderBy: { createdAt: "desc" } }),
       prisma.auditLog.findMany({ include: { user: true }, orderBy: { createdAt: "desc" }, take: 20 }),
-      prisma.coolifyApplication.count(),
+      Promise.all([
+        prisma.coolifyServer.count({ where: { status: "ACTIVE" } }),
+        prisma.coolifyProject.count({ where: { status: "ACTIVE" } }),
+        prisma.coolifyApplication.count({ where: { status: "ACTIVE" } })
+      ]).then((counts) => counts.reduce((total, count) => total + count, 0)),
+      Promise.all([
+        prisma.coolifyServer.count({ where: { status: "MISSING" } }),
+        prisma.coolifyProject.count({ where: { status: "MISSING" } }),
+        prisma.coolifyApplication.count({ where: { status: "MISSING" } })
+      ]).then((counts) => counts.reduce((total, count) => total + count, 0)),
+      Promise.all([
+        prisma.coolifyServer.count({ where: { status: "REMOVED" } }),
+        prisma.coolifyProject.count({ where: { status: "REMOVED" } }),
+        prisma.coolifyApplication.count({ where: { status: "REMOVED" } })
+      ]).then((counts) => counts.reduce((total, count) => total + count, 0)),
       prisma.project.count({
         where: {
           status: { not: "ARCHIVED" },
-          coolifyLink: { isNot: null }
+          coolifyLink: {
+            is: {
+              OR: [
+                {
+                  coolifyProject: {
+                    is: {
+                      status: { in: ["MISSING", "REMOVED"] }
+                    }
+                  }
+                },
+                {
+                  coolifyApplication: {
+                    is: {
+                      status: { in: ["MISSING", "REMOVED"] }
+                    }
+                  }
+                }
+              ]
+            }
+          }
         }
       }),
-      prisma.project.count({
+      prisma.projectApplication.count({
+        where: { status: { not: "ARCHIVED" } }
+      }),
+      prisma.projectApplication.count({
+        where: { status: "READY" }
+      }),
+      prisma.projectApplication.count({
         where: {
           status: { not: "ARCHIVED" },
-          coolifyLink: { is: null }
+          coolifyApplicationId: { not: null }
+        }
+      }),
+      prisma.projectApplication.count({
+        where: {
+          status: { not: "ARCHIVED" },
+          OR: [{ domain: null }, { domain: "" }]
         }
       })
     ]);
@@ -68,9 +118,16 @@ export async function GET(request: Request) {
       databases: databases.map(toProjectDatabase),
       history: history.map(toHistoryItem),
       coolifySummary: {
-        applications: coolifyApplicationsCount,
-        linkedProjects: linkedCoolifyProjectsCount,
-        unlinkedProjects: unlinkedCoolifyProjectsCount
+        activeResources: activeCoolifyResourcesCount,
+        missingResources: missingCoolifyResourcesCount,
+        removedResources: removedCoolifyResourcesCount,
+        brokenProjectLinks: brokenCoolifyProjectLinksCount
+      },
+      applicationSummary: {
+        planned: plannedApplicationsCount,
+        ready: readyApplicationsCount,
+        linkedToCoolify: linkedApplicationsCount,
+        withoutDomain: applicationsWithoutDomainCount
       }
     });
   } catch (error) {

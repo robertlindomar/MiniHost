@@ -18,6 +18,9 @@ const projectInclude = {
       },
       databases: {
         where: { status: { not: "ARCHIVED" } }
+      },
+      applications: {
+        where: { status: { not: "ARCHIVED" } }
       }
     }
   },

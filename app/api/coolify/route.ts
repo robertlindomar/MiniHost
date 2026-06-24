@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     await requireCurrentUser(request);
     const [coolify, cached] = await Promise.all([
       getCoolifyClientStatus(),
-      getCoolifyCachedResources()
+      getCoolifyCachedResources({ includeRemoved: true })
     ]);
 
     return ok({

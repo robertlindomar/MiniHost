@@ -69,6 +69,14 @@ export async function POST(request: Request, context: RouteContext) {
       return fail("Aplicação do Coolify não encontrada. Sincronize os recursos e tente novamente.", 404);
     }
 
+    if (coolifyProject && coolifyProject.status !== "ACTIVE") {
+      return fail("Este projeto do Coolify não está ativo no cache local. Sincronize novamente ou escolha outro recurso.", 400);
+    }
+
+    if (coolifyApplication && coolifyApplication.status !== "ACTIVE") {
+      return fail("Esta aplicação do Coolify não está ativa no cache local. Sincronize novamente ou escolha outro recurso.", 400);
+    }
+
     const link = await prisma.$transaction(async (tx) => {
       const saved = await tx.projectCoolifyLink.upsert({
         where: { projectId },

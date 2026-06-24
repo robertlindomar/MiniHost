@@ -49,6 +49,25 @@ enum CoolifyCredentialStatus {
   DISABLED
 }
 
+enum ProjectApplicationStatus {
+  DRAFT
+  READY
+  LINKED
+  DEPLOYED
+  FAILED
+  ARCHIVED
+}
+
+enum ProjectApplicationType {
+  FRONTEND
+  BACKEND
+  FULLSTACK
+  STATIC
+  DOCKERFILE
+  DOCKER_COMPOSE
+  OTHER
+}
+
 model User {
   id           String     @id @default(cuid())
   name         String
@@ -87,6 +106,7 @@ model Project {
   archivedAt  DateTime?
   records     DnsRecord[]
   databases   ProjectDatabase[]
+  applications ProjectApplication[]
   coolifyLink ProjectCoolifyLink?
 
   @@index([status])
@@ -117,6 +137,7 @@ model ProjectDatabase {
   updatedAt                 DateTime              @updatedAt
   archivedAt                DateTime?
   project                   Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  applications              ProjectApplication[]
 
   @@unique([host, databaseName])
   @@unique([host, databaseUser])
@@ -147,6 +168,7 @@ model DnsRecord {
   updatedAt          DateTime  @updatedAt
   domain             Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
   project            Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  applications       ProjectApplication[]
 
   @@index([domainId])
   @@index([projectId])
@@ -204,16 +226,22 @@ model CoolifyCredential {
 }
 
 model CoolifyServer {
-  id           String   @id @default(cuid())
-  coolifyId    String   @unique
-  name         String
-  description  String?
-  status       String?
-  ip           String?
-  rawData      Json?
-  lastSyncedAt DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  coolifyId        String   @unique
+  name             String
+  description      String?
+  status           String   @default("ACTIVE")
+  remoteStatus     String?
+  ip               String?
+  isActive         Boolean  @default(true)
+  lastSeenAt       DateTime?
+  missingSince     DateTime?
+  removedAt        DateTime?
+  rawData          Json?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  applicationPlans ProjectApplication[]
 
   @@index([name])
   @@index([status])
@@ -221,33 +249,47 @@ model CoolifyServer {
 }
 
 model CoolifyProject {
-  id           String               @id @default(cuid())
-  coolifyId    String               @unique
-  name         String
-  description  String?
-  rawData      Json?
-  lastSyncedAt DateTime?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  links        ProjectCoolifyLink[]
+  id               String               @id @default(cuid())
+  coolifyId        String               @unique
+  name             String
+  description      String?
+  status           String               @default("ACTIVE")
+  remoteStatus     String?
+  isActive         Boolean              @default(true)
+  lastSeenAt       DateTime?
+  missingSince     DateTime?
+  removedAt        DateTime?
+  rawData          Json?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  links            ProjectCoolifyLink[]
+  applicationPlans ProjectApplication[]
 
   @@index([name])
+  @@index([status])
   @@map("coolify_projects")
 }
 
 model CoolifyApplication {
-  id            String               @id @default(cuid())
-  coolifyId     String               @unique
-  name          String
-  fqdn          String?
-  status        String?
-  gitRepository String?
-  branch        String?
-  rawData       Json?
-  lastSyncedAt  DateTime?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  links         ProjectCoolifyLink[]
+  id               String               @id @default(cuid())
+  coolifyId        String               @unique
+  name             String
+  fqdn             String?
+  status           String               @default("ACTIVE")
+  remoteStatus     String?
+  gitRepository    String?
+  branch           String?
+  isActive         Boolean              @default(true)
+  lastSeenAt       DateTime?
+  missingSince     DateTime?
+  removedAt        DateTime?
+  rawData          Json?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  links            ProjectCoolifyLink[]
+  applicationPlans ProjectApplication[]
 
   @@index([name])
   @@index([status])
@@ -268,6 +310,51 @@ model ProjectCoolifyLink {
   @@index([coolifyProjectCacheId])
   @@index([coolifyApplicationCacheId])
   @@map("project_coolify_links")
+}
+
+model ProjectApplication {
+  id                            String                   @id @default(cuid())
+  projectId                     String
+  projectDatabaseId             String?
+  dnsRecordId                   String?
+  name                          String
+  slug                          String
+  type                          ProjectApplicationType   @default(FULLSTACK)
+  status                        ProjectApplicationStatus @default(DRAFT)
+  gitRepository                 String?
+  gitBranch                     String?
+  rootDirectory                 String?
+  buildCommand                  String?
+  startCommand                  String?
+  installCommand                String?
+  outputDirectory               String?
+  port                          Int?
+  domain                        String?
+  environmentVariablesEncrypted String?
+  coolifyServerId               String?
+  coolifyProjectId              String?
+  coolifyApplicationId          String?
+  notes                         String?
+  createdAt                     DateTime                 @default(now())
+  updatedAt                     DateTime                 @updatedAt
+  archivedAt                    DateTime?
+  project                       Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectDatabase               ProjectDatabase?         @relation(fields: [projectDatabaseId], references: [id], onDelete: SetNull)
+  dnsRecord                     DnsRecord?               @relation(fields: [dnsRecordId], references: [id], onDelete: SetNull)
+  coolifyServer                 CoolifyServer?           @relation(fields: [coolifyServerId], references: [id], onDelete: SetNull)
+  coolifyProject                CoolifyProject?          @relation(fields: [coolifyProjectId], references: [id], onDelete: SetNull)
+  coolifyApplication            CoolifyApplication?      @relation(fields: [coolifyApplicationId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, slug])
+  @@index([projectId])
+  @@index([status])
+  @@index([type])
+  @@index([projectDatabaseId])
+  @@index([dnsRecordId])
+  @@index([coolifyServerId])
+  @@index([coolifyProjectId])
+  @@index([coolifyApplicationId])
+  @@map("project_applications")
 }
 
 model AppSetting {

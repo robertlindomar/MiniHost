@@ -29,6 +29,9 @@ export async function GET(request: Request) {
             },
             databases: {
               where: { status: { not: "ARCHIVED" } }
+            },
+            applications: {
+              where: { status: { not: "ARCHIVED" } }
             }
           }
         }
@@ -67,6 +70,9 @@ export async function POST(request: Request) {
                 where: { status: { not: "DELETED" } }
               },
               databases: {
+                where: { status: { not: "ARCHIVED" } }
+              },
+              applications: {
                 where: { status: { not: "ARCHIVED" } }
               }
             }

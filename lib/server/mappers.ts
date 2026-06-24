@@ -6,12 +6,14 @@ import type {
   CoolifyServer as PrismaCoolifyServer,
   DnsRecord as PrismaDnsRecord,
   Domain as PrismaDomain,
+  ProjectApplication as PrismaProjectApplication,
   Project as PrismaProject,
   ProjectCoolifyLink as PrismaProjectCoolifyLink,
   ProjectDatabase as PrismaProjectDatabase
 } from "@prisma/client";
 import type {
   CoolifyApplicationCache,
+  CoolifyCacheStatus,
   CoolifyProjectCache,
   CoolifyServerCache,
   DnsRecord,
@@ -20,10 +22,17 @@ import type {
   HistoryItem,
   MiniHostSettings,
   Project,
+  ProjectApplication,
+  ProjectApplicationStatus,
+  ProjectApplicationType,
   ProjectDatabase,
   ProjectDatabaseStatus,
   ProjectStatus
 } from "@/lib/types";
+import {
+  calculateApplicationReadiness,
+  decryptEnvironmentVariables
+} from "@/lib/server/project-application";
 
 type DnsRecordWithProject = PrismaDnsRecord & {
   project?: {
@@ -32,10 +41,19 @@ type DnsRecordWithProject = PrismaDnsRecord & {
   } | null;
 };
 
+type ProjectApplicationWithResources = PrismaProjectApplication & {
+  projectDatabase?: PrismaProjectDatabase | null;
+  dnsRecord?: DnsRecordWithProject | null;
+  coolifyServer?: PrismaCoolifyServer | null;
+  coolifyProject?: PrismaCoolifyProject | null;
+  coolifyApplication?: PrismaCoolifyApplication | null;
+};
+
 type ProjectWithCount = PrismaProject & {
   _count?: {
     records: number;
     databases?: number;
+    applications?: number;
   };
   coolifyLink?: ProjectCoolifyLinkWithResources | null;
 };
@@ -84,8 +102,82 @@ export function toProject(project: ProjectWithCount): Project {
     archivedAt: project.archivedAt?.toISOString(),
     recordCount: project._count?.records,
     databaseCount: project._count?.databases,
+    applicationCount: project._count?.applications,
     coolifyLink: project.coolifyLink ? toProjectCoolifyLink(project.coolifyLink) : undefined
   };
+}
+
+export function toProjectApplicationStatus(status: string): ProjectApplicationStatus {
+  if (status === "READY" || status === "LINKED" || status === "DEPLOYED" || status === "FAILED" || status === "ARCHIVED") {
+    return status;
+  }
+
+  return "DRAFT";
+}
+
+export function toProjectApplicationType(type: string): ProjectApplicationType {
+  if (
+    type === "FRONTEND" ||
+    type === "BACKEND" ||
+    type === "FULLSTACK" ||
+    type === "STATIC" ||
+    type === "DOCKERFILE" ||
+    type === "DOCKER_COMPOSE" ||
+    type === "OTHER"
+  ) {
+    return type;
+  }
+
+  return "OTHER";
+}
+
+function toCoolifyCacheStatus(status: string): CoolifyCacheStatus {
+  if (status === "MISSING" || status === "REMOVED" || status === "ERROR") {
+    return status;
+  }
+
+  return "ACTIVE";
+}
+
+export function toProjectApplication(
+  application: ProjectApplicationWithResources,
+  options: { includeEnvironmentValues?: boolean } = {}
+): ProjectApplication {
+  const environmentVariables = decryptEnvironmentVariables(application.environmentVariablesEncrypted);
+  const base = {
+    id: application.id,
+    projectId: application.projectId,
+    projectDatabaseId: application.projectDatabaseId ?? undefined,
+    dnsRecordId: application.dnsRecordId ?? undefined,
+    name: application.name,
+    slug: application.slug,
+    type: toProjectApplicationType(application.type),
+    status: toProjectApplicationStatus(application.status),
+    gitRepository: application.gitRepository ?? undefined,
+    gitBranch: application.gitBranch ?? undefined,
+    rootDirectory: application.rootDirectory ?? undefined,
+    buildCommand: application.buildCommand ?? undefined,
+    startCommand: application.startCommand ?? undefined,
+    installCommand: application.installCommand ?? undefined,
+    outputDirectory: application.outputDirectory ?? undefined,
+    port: application.port ?? undefined,
+    domain: application.domain ?? undefined,
+    notes: application.notes ?? undefined,
+    createdAt: application.createdAt.toISOString(),
+    updatedAt: application.updatedAt.toISOString(),
+    archivedAt: application.archivedAt?.toISOString(),
+    environmentVariableKeys: environmentVariables.map((variable) => variable.key),
+    readiness: calculateApplicationReadiness(application, environmentVariables),
+    projectDatabase: application.projectDatabase ? toProjectDatabase(application.projectDatabase) : undefined,
+    dnsRecord: application.dnsRecord ? toDnsRecord(application.dnsRecord) : undefined,
+    coolifyServer: application.coolifyServer ? toCoolifyServer(application.coolifyServer) : undefined,
+    coolifyProject: application.coolifyProject ? toCoolifyProject(application.coolifyProject) : undefined,
+    coolifyApplication: application.coolifyApplication ? toCoolifyApplication(application.coolifyApplication) : undefined
+  };
+
+  return options.includeEnvironmentValues
+    ? { ...base, environmentVariables }
+    : base;
 }
 
 export function toCoolifyServer(server: PrismaCoolifyServer): CoolifyServerCache {
@@ -94,8 +186,13 @@ export function toCoolifyServer(server: PrismaCoolifyServer): CoolifyServerCache
     coolifyId: server.coolifyId,
     name: server.name,
     description: server.description ?? undefined,
-    status: server.status ?? undefined,
+    status: toCoolifyCacheStatus(server.status),
+    remoteStatus: server.remoteStatus ?? undefined,
     ip: server.ip ?? undefined,
+    isActive: server.isActive,
+    lastSeenAt: server.lastSeenAt?.toISOString(),
+    missingSince: server.missingSince?.toISOString(),
+    removedAt: server.removedAt?.toISOString(),
     lastSyncedAt: server.lastSyncedAt?.toISOString(),
     createdAt: server.createdAt.toISOString(),
     updatedAt: server.updatedAt.toISOString()
@@ -108,6 +205,12 @@ export function toCoolifyProject(project: PrismaCoolifyProject): CoolifyProjectC
     coolifyId: project.coolifyId,
     name: project.name,
     description: project.description ?? undefined,
+    status: toCoolifyCacheStatus(project.status),
+    remoteStatus: project.remoteStatus ?? undefined,
+    isActive: project.isActive,
+    lastSeenAt: project.lastSeenAt?.toISOString(),
+    missingSince: project.missingSince?.toISOString(),
+    removedAt: project.removedAt?.toISOString(),
     lastSyncedAt: project.lastSyncedAt?.toISOString(),
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString()
@@ -120,9 +223,14 @@ export function toCoolifyApplication(application: PrismaCoolifyApplication): Coo
     coolifyId: application.coolifyId,
     name: application.name,
     fqdn: application.fqdn ?? undefined,
-    status: application.status ?? undefined,
+    status: toCoolifyCacheStatus(application.status),
+    remoteStatus: application.remoteStatus ?? undefined,
     gitRepository: application.gitRepository ?? undefined,
     branch: application.branch ?? undefined,
+    isActive: application.isActive,
+    lastSeenAt: application.lastSeenAt?.toISOString(),
+    missingSince: application.missingSince?.toISOString(),
+    removedAt: application.removedAt?.toISOString(),
     lastSyncedAt: application.lastSyncedAt?.toISOString(),
     createdAt: application.createdAt.toISOString(),
     updatedAt: application.updatedAt.toISOString()
@@ -235,6 +343,7 @@ export function toHistoryItem(item: AuditLogWithUser): HistoryItem {
       item.entityType === "settings" ||
       item.entityType === "project" ||
       item.entityType === "project_database" ||
+      item.entityType === "project_application" ||
       item.entityType === "coolify"
         ? item.entityType
         : "settings",

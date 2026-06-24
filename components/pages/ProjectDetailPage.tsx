@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ProjectDatabasesSection } from "@/components/projects/databases/ProjectDatabasesSection";
+import { ProjectApplicationsSection } from "@/components/projects/applications/ProjectApplicationsSection";
 import { LinkRecordsDialog } from "@/components/projects/LinkRecordsDialog";
 import { ProjectStatusBadge } from "@/components/projects/ProjectStatusBadge";
 import { DnsTemplatesPanel } from "@/components/templates/DnsTemplatesPanel";
@@ -116,6 +117,14 @@ export function ProjectDetailPage() {
 
   const isArchived = project?.status === "ARCHIVED";
   const linkedRecordIds = useMemo(() => linkedRecords.map((record) => record.id), [linkedRecords]);
+  const activeCoolifyProjects = useMemo(
+    () => coolifyProjects.filter((coolifyProject) => coolifyProject.status === "ACTIVE"),
+    [coolifyProjects]
+  );
+  const activeCoolifyApplications = useMemo(
+    () => coolifyApplications.filter((application) => application.status === "ACTIVE"),
+    [coolifyApplications]
+  );
 
   async function handleLinkRecords(recordIds: string[]) {
     try {
@@ -224,6 +233,13 @@ export function ProjectDetailPage() {
     );
   }
 
+  const linkedCoolifyResources = [
+    project.coolifyLink?.coolifyProject,
+    project.coolifyLink?.coolifyApplication
+  ].filter(Boolean);
+  const hasRemovedCoolifyLink = linkedCoolifyResources.some((resource) => resource?.status === "REMOVED");
+  const hasMissingCoolifyLink = linkedCoolifyResources.some((resource) => resource?.status === "MISSING");
+
   return (
     <div className={pageContainerClass}>
       {toast ? <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} /> : null}
@@ -293,6 +309,22 @@ export function ProjectDetailPage() {
           />
         ) : null}
 
+        {hasRemovedCoolifyLink ? (
+          <div className="mt-5">
+            <Notice
+              type="error"
+              message="O recurso Coolify vinculado parece ter sido removido no Coolify. O vínculo local foi mantido para histórico."
+            />
+          </div>
+        ) : hasMissingCoolifyLink ? (
+          <div className="mt-5">
+            <Notice
+              type="info"
+              message="O recurso Coolify vinculado não foi encontrado na última sincronização. Sincronize novamente ou remova o vínculo local."
+            />
+          </div>
+        ) : null}
+
         {project.coolifyLink ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
@@ -303,6 +335,12 @@ export function ProjectDetailPage() {
               {project.coolifyLink.coolifyProject?.description ? (
                 <p className="mt-1 text-sm text-zinc-600">{project.coolifyLink.coolifyProject.description}</p>
               ) : null}
+              {project.coolifyLink.coolifyProject ? (
+                <div className="mt-2 space-y-1 text-sm text-zinc-600">
+                  <p>Estado local: {project.coolifyLink.coolifyProject.status}</p>
+                  <p>Status remoto: {project.coolifyLink.coolifyProject.remoteStatus || "-"}</p>
+                </div>
+              ) : null}
             </div>
             <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-normal text-zinc-500">Aplicação Coolify</p>
@@ -312,7 +350,8 @@ export function ProjectDetailPage() {
               {project.coolifyLink.coolifyApplication ? (
                 <div className="mt-2 space-y-1 text-sm text-zinc-600">
                   <p>FQDN: {project.coolifyLink.coolifyApplication.fqdn || "-"}</p>
-                  <p>Status: {project.coolifyLink.coolifyApplication.status || "-"}</p>
+                  <p>Estado local: {project.coolifyLink.coolifyApplication.status || "-"}</p>
+                  <p>Status remoto: {project.coolifyLink.coolifyApplication.remoteStatus || "-"}</p>
                   <p>Repo: {project.coolifyLink.coolifyApplication.gitRepository || "-"}</p>
                   <p>Branch: {project.coolifyLink.coolifyApplication.branch || "-"}</p>
                 </div>
@@ -334,7 +373,7 @@ export function ProjectDetailPage() {
                 className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-zinc-50"
               >
                 <option value="">Sem projeto vinculado</option>
-                {coolifyProjects.map((coolifyProject) => (
+                {activeCoolifyProjects.map((coolifyProject) => (
                   <option key={coolifyProject.id} value={coolifyProject.id}>
                     {coolifyProject.name}
                   </option>
@@ -353,7 +392,7 @@ export function ProjectDetailPage() {
                 className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-zinc-50"
               >
                 <option value="">Sem aplicação vinculada</option>
-                {coolifyApplications.map((application) => (
+                {activeCoolifyApplications.map((application) => (
                   <option key={application.id} value={application.id}>
                     {application.name}
                   </option>
@@ -378,13 +417,20 @@ export function ProjectDetailPage() {
                   disabled={isSavingCoolifyLink}
                   className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Remover vínculo
+                  Remover vínculo local
                 </button>
               ) : null}
             </div>
           </div>
         ) : null}
       </section>
+
+      <ProjectApplicationsSection
+        project={project}
+        linkedRecords={linkedRecords}
+        domains={domains}
+        onChanged={() => void reload()}
+      />
 
       <ProjectDatabasesSection project={project} onChanged={() => void reload()} />
 

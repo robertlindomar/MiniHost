@@ -16,6 +16,7 @@ export type AuditEntityFilter =
   | "record"
   | "project"
   | "project_database"
+  | "project_application"
   | "cloudflare"
   | "coolify"
   | "template"
@@ -177,6 +178,10 @@ export function getEntityFilterCategory(item: HistoryItem): AuditEntityFilter {
     return "project_database";
   }
 
+  if (item.entityType === "project_application") {
+    return "project_application";
+  }
+
   if (item.entityType === "settings") {
     return "settings";
   }
@@ -248,6 +253,13 @@ export function getEntityDisplay(item: HistoryItem) {
   if (item.entityType === "project_database") {
     return {
       label: "Banco PostgreSQL",
+      identifier: item.entityName
+    };
+  }
+
+  if (item.entityType === "project_application") {
+    return {
+      label: "Aplicação",
       identifier: item.entityName
     };
   }
