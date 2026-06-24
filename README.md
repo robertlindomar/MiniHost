@@ -4,6 +4,17 @@ MiniHost é um painel web para organizar domínios, registros DNS, projetos, ban
 
 Hoje o painel integra com PostgreSQL (metadados e provisionamento real), Cloudflare (sincronização e CRUD de DNS) e Coolify (sincronização de recursos e criação de aplicações a partir de repositórios públicos). O objetivo futuro é evoluir para deploy automatizado completo com repositórios privados e ações destrutivas controladas.
 
+## Etapa 16 implementada
+
+- **Zona de perigo** no detalhe do projeto (`/projects/[id]`) com ações separadas: **Arquivar** (local) e **Encerrar projeto e infraestrutura** (destrutivo).
+- Orquestrador `POST /api/projects/terminate` com checklist etapa a etapa, confirmação forte `encerrar slug-do-projeto` e opções selecionáveis (DNS, apps Coolify, projeto Coolify, bancos).
+- Preview de recursos: `GET /api/projects/[id]/terminate-preview`.
+- Novos status de projeto: `TERMINATING`, `TERMINATED`, `TERMINATED_WITH_ERRORS`.
+- Falha parcial com pendências persistidas e botão **Tentar novamente pendências**.
+- Bancos PostgreSQL **preservados por padrão**; destruição só com opção explícita (reutiliza desprovisionamento seguro da Etapa 11.5).
+- Proteções: slug `minihost`, banco/usuário `postgres`/`minihost`, domínio raiz do painel (não subdomínios), registro DNS apex `@` do painel, apps MiniHost.
+- AuditLog `PROJECT_TERMINATE_*` sem dados sensíveis.
+
 ## Etapa 15 implementada
 
 - Nova área **Publicar** (`/publicar`) com fluxo unificado para aplicações **Static**.
@@ -627,7 +638,58 @@ Eles reutilizam a lógica dos Templates DNS. A diferença é que o novo registro
 
 ### Arquivar projeto
 
-Na listagem de projetos, clique em `Arquivar`. O projeto muda para status `ARCHIVED` e recebe `archivedAt`, mas os registros DNS vinculados **não são excluídos**.
+Na listagem de projetos ou na **Zona de perigo** do detalhe do projeto, use **Arquivar projeto**. O projeto muda para status `ARCHIVED` e recebe `archivedAt`, mas os registros DNS, aplicações Coolify, projeto Coolify e bancos PostgreSQL vinculados **não são excluídos**.
+
+Arquivar é uma ação **local e segura** — ideal para ocultar projetos inativos sem derrubar infraestrutura.
+
+### Encerrar projeto e infraestrutura (Etapa 16)
+
+Na tela de detalhes do projeto (`/projects/[id]`), role até a **Zona de perigo** no final da página.
+
+#### Diferença entre Arquivar e Encerrar
+
+| Ação | O que faz | DNS Cloudflare | Apps Coolify | Projeto Coolify | Bancos PostgreSQL |
+|------|-----------|----------------|--------------|-----------------|-------------------|
+| **Arquivar** | Marca `ARCHIVED` localmente | Mantém | Mantém | Mantém | Mantém |
+| **Encerrar** | Remove recursos reais (conforme opções) | Pode remover | Pode remover | Pode remover | **Preservados por padrão** |
+
+#### Confirmação forte
+
+Encerrar exige digitar exatamente `encerrar {slug-do-projeto}` (ex.: `encerrar portfolio`) e marcar que você entende os riscos.
+
+#### O que é removido no encerramento (padrões)
+
+Por padrão, o modal marca:
+
+- Arquivar projeto no MiniHost
+- Excluir DNS Cloudflare vinculados
+- Excluir aplicações no Coolify
+- Excluir projeto Coolify (se foi criado pelo MiniHost)
+- **Não** desprovisionar bancos PostgreSQL
+
+#### Por que bancos não são removidos por padrão
+
+Destruir banco é irreversível. Use o fluxo próprio de desprovisionamento na seção de bancos do projeto, ou marque explicitamente a opção no modal de encerramento.
+
+#### Falha parcial e pendências
+
+Se parte do encerramento falhar (ex.: DNS removido, mas projeto Coolify não), o status fica `TERMINATED_WITH_ERRORS` e as pendências aparecem na Zona de perigo com o erro de cada recurso.
+
+Use **Tentar novamente pendências** para repetir apenas os itens que falharam (com nova confirmação).
+
+#### Proteções de segurança
+
+Não é permitido encerrar:
+
+- Projeto com slug `minihost`
+- Banco ou usuário `postgres` / `minihost`
+- Domínio principal **igual ao domínio raiz** do painel (ex.: `meudominio.com`, não `app.meudominio.com`)
+- Registro DNS apex (`@`) do domínio raiz do painel
+- Aplicação identificada como MiniHost
+
+#### AuditLog
+
+O encerramento registra eventos `PROJECT_TERMINATE_*` sem tokens, senhas ou envs sensíveis.
 
 ## Bancos PostgreSQL por projeto
 

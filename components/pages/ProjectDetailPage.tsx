@@ -4,6 +4,7 @@ import { ArrowLeft, Link2, Rocket, Unlink } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ProjectDangerZone } from "@/components/projects/ProjectDangerZone";
 import { ProjectDatabasesSection } from "@/components/projects/databases/ProjectDatabasesSection";
 import { ProjectApplicationsSection } from "@/components/projects/applications/ProjectApplicationsSection";
 import { LinkRecordsDialog } from "@/components/projects/LinkRecordsDialog";
@@ -115,7 +116,12 @@ export function ProjectDetailPage() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  const isArchived = project?.status === "ARCHIVED";
+  const isArchived =
+    project?.status === "ARCHIVED" ||
+    project?.status === "TERMINATED" ||
+    project?.status === "TERMINATED_WITH_ERRORS";
+  const isReadOnly =
+    isArchived || project?.status === "TERMINATING";
   const linkedRecordIds = useMemo(() => linkedRecords.map((record) => record.id), [linkedRecords]);
   const activeCoolifyProjects = useMemo(
     () => coolifyProjects.filter((coolifyProject) => coolifyProject.status === "ACTIVE"),
@@ -360,7 +366,7 @@ export function ProjectDetailPage() {
           </div>
         ) : null}
 
-        {!isArchived ? (
+        {!isReadOnly ? (
           <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
             <label className="space-y-2">
               <span className="text-sm font-medium text-zinc-700">Projeto Coolify</span>
@@ -459,7 +465,7 @@ export function ProjectDetailPage() {
             <h3 className="text-lg font-semibold text-zinc-950">Registros DNS vinculados</h3>
             <p className="mt-1 text-sm text-zinc-500">{linkedRecords.length} registro(s) neste projeto</p>
           </div>
-          {!isArchived ? (
+          {!isReadOnly ? (
             <button
               type="button"
               onClick={() => setIsLinkDialogOpen(true)}
@@ -520,7 +526,7 @@ export function ProjectDetailPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex justify-end">
-                          {!isArchived ? (
+                          {!isReadOnly ? (
                             <button
                               type="button"
                               onClick={() => void handleUnlinkRecord(record)}
@@ -550,6 +556,12 @@ export function ProjectDetailPage() {
         linkedRecordIds={linkedRecordIds}
         onCancel={() => (isSubmitting ? undefined : setIsLinkDialogOpen(false))}
         onConfirm={(recordIds) => void handleLinkRecords(recordIds)}
+      />
+
+      <ProjectDangerZone
+        project={project}
+        onChanged={() => reload()}
+        onToast={(nextToast) => setToast(nextToast)}
       />
     </div>
   );

@@ -5,7 +5,10 @@ const statusConfig: Record<ProjectStatus, { label: string; variant: "success" | 
   DRAFT: { label: "Rascunho", variant: "muted" },
   ACTIVE: { label: "Ativo", variant: "success" },
   PAUSED: { label: "Pausado", variant: "warning" },
-  ARCHIVED: { label: "Arquivado", variant: "danger" }
+  ARCHIVED: { label: "Arquivado", variant: "danger" },
+  TERMINATING: { label: "Encerrando", variant: "warning" },
+  TERMINATED: { label: "Encerrado", variant: "muted" },
+  TERMINATED_WITH_ERRORS: { label: "Encerrado com pendências", variant: "danger" }
 };
 
 export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {

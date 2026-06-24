@@ -377,8 +377,24 @@ export async function getCoolifyApplication(applicationUuid: string) {
 
   return {
     uuid: readString(payload, ["uuid", "id"]) ?? applicationUuid,
-    status: readString(payload, ["status", "status_text", "application_status"]) ?? undefined,
+    status: readString(payload, ["status", "application_status"]) ?? undefined,
     fqdn: readString(payload, ["fqdn", "domains"]) ?? undefined,
     name: readString(payload, ["name"]) ?? undefined
   };
+}
+
+export async function deleteCoolifyApplication(applicationUuid: string) {
+  await coolifyRequest(`/applications/${applicationUuid}`, {
+    method: "DELETE"
+  });
+
+  return { deleted: true };
+}
+
+export async function deleteCoolifyProject(projectUuid: string) {
+  await coolifyRequest(`/projects/${projectUuid}`, {
+    method: "DELETE"
+  });
+
+  return { deleted: true };
 }

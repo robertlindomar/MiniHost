@@ -23,6 +23,9 @@ enum ProjectStatus {
   ACTIVE
   PAUSED
   ARCHIVED
+  TERMINATING
+  TERMINATED
+  TERMINATED_WITH_ERRORS
 }
 
 enum ProjectDatabaseStatus {
@@ -58,6 +61,7 @@ enum ProjectApplicationStatus {
   DEPLOYED
   FAILED
   ARCHIVED
+  REMOVED_REMOTE
 }
 
 enum ProjectApplicationType {
@@ -105,7 +109,12 @@ model Project {
   mainDomain  String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
-  archivedAt  DateTime?
+  archivedAt           DateTime?
+  terminatedAt         DateTime?
+  terminatedBy         String?
+  terminationStatus    String?
+  lastTerminationError String?
+  terminationPending   Json?
   records     DnsRecord[]
   databases   ProjectDatabase[]
   applications ProjectApplication[]
@@ -351,6 +360,10 @@ model ProjectApplication {
   createdAt                     DateTime                 @default(now())
   updatedAt                     DateTime                 @updatedAt
   archivedAt                    DateTime?
+  destroyedAt                   DateTime?
+  destroyedBy                   String?
+  destroyStatus                 String?
+  lastDestroyError              String?
   project                       Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectDatabase               ProjectDatabase?         @relation(fields: [projectDatabaseId], references: [id], onDelete: SetNull)
   dnsRecord                     DnsRecord?               @relation(fields: [dnsRecordId], references: [id], onDelete: SetNull)

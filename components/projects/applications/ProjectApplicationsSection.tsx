@@ -230,7 +230,11 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
 
-  const isArchivedProject = project.status === "ARCHIVED";
+  const isArchivedProject =
+    project.status === "ARCHIVED" ||
+    project.status === "TERMINATED" ||
+    project.status === "TERMINATED_WITH_ERRORS" ||
+    project.status === "TERMINATING";
 
   const domainOptions = useMemo(
     () => linkedRecords.filter((record) => record.status !== "DELETED").map((record) => ({

@@ -36,6 +36,10 @@ export async function POST(request: Request, context: RouteContext) {
       return fail("Este projeto já está arquivado.");
     }
 
+    if (existing.status === "TERMINATING") {
+      return fail("Este projeto está em encerramento. Aguarde a conclusão.");
+    }
+
     const archivedAt = new Date();
 
     const project = await prisma.$transaction(async (tx) => {

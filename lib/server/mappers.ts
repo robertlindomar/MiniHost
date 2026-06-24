@@ -27,7 +27,8 @@ import type {
   ProjectApplicationType,
   ProjectDatabase,
   ProjectDatabaseStatus,
-  ProjectStatus
+  ProjectStatus,
+  TerminationPendingItem
 } from "@/lib/types";
 import {
   calculateApplicationReadiness,
@@ -81,8 +82,47 @@ export const defaultSettings: MiniHostSettings = {
   defaultPostgresUserSuffix: "_user"
 };
 
+function parseTerminationPending(value: unknown): TerminationPendingItem[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const items = value
+    .filter((item): item is TerminationPendingItem => {
+      if (!item || typeof item !== "object") {
+        return false;
+      }
+
+      const candidate = item as TerminationPendingItem;
+
+      return (
+        (candidate.type === "dns" ||
+          candidate.type === "coolify_app" ||
+          candidate.type === "coolify_project" ||
+          candidate.type === "database") &&
+        typeof candidate.id === "string" &&
+        typeof candidate.error === "string"
+      );
+    })
+    .map((item) => ({
+      type: item.type,
+      id: item.id,
+      label: item.label,
+      error: item.error
+    }));
+
+  return items.length > 0 ? items : undefined;
+}
+
 export function toProjectStatus(status: string): ProjectStatus {
-  if (status === "ACTIVE" || status === "PAUSED" || status === "ARCHIVED") {
+  if (
+    status === "ACTIVE" ||
+    status === "PAUSED" ||
+    status === "ARCHIVED" ||
+    status === "TERMINATING" ||
+    status === "TERMINATED" ||
+    status === "TERMINATED_WITH_ERRORS"
+  ) {
     return status;
   }
 
@@ -100,6 +140,11 @@ export function toProject(project: ProjectWithCount): Project {
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
     archivedAt: project.archivedAt?.toISOString(),
+    terminatedAt: project.terminatedAt?.toISOString(),
+    terminatedBy: project.terminatedBy ?? undefined,
+    terminationStatus: project.terminationStatus ?? undefined,
+    lastTerminationError: project.lastTerminationError ?? undefined,
+    terminationPending: parseTerminationPending(project.terminationPending),
     recordCount: project._count?.records,
     databaseCount: project._count?.databases,
     applicationCount: project._count?.applications,
@@ -115,7 +160,8 @@ export function toProjectApplicationStatus(status: string): ProjectApplicationSt
     status === "DEPLOYING" ||
     status === "DEPLOYED" ||
     status === "FAILED" ||
-    status === "ARCHIVED"
+    status === "ARCHIVED" ||
+    status === "REMOVED_REMOTE"
   ) {
     return status;
   }
@@ -191,7 +237,11 @@ export function toProjectApplication(
     lastDeployStartedAt: application.lastDeployStartedAt?.toISOString(),
     lastDeployStatus: application.lastDeployStatus ?? undefined,
     lastDeployMessage: application.lastDeployMessage ?? undefined,
-    lastCoolifySyncAt: application.lastCoolifySyncAt?.toISOString()
+    lastCoolifySyncAt: application.lastCoolifySyncAt?.toISOString(),
+    destroyedAt: application.destroyedAt?.toISOString(),
+    destroyedBy: application.destroyedBy ?? undefined,
+    destroyStatus: application.destroyStatus ?? undefined,
+    lastDestroyError: application.lastDestroyError ?? undefined
   };
 
   return options.includeEnvironmentValues

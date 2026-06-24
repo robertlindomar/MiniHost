@@ -1,6 +1,13 @@
 export type EntityStatus = "active" | "inactive";
 
-export type ProjectStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "ARCHIVED";
+export type ProjectStatus =
+  | "DRAFT"
+  | "ACTIVE"
+  | "PAUSED"
+  | "ARCHIVED"
+  | "TERMINATING"
+  | "TERMINATED"
+  | "TERMINATED_WITH_ERRORS";
 
 export type ProjectDatabaseStatus =
   | "PLANNED"
@@ -21,7 +28,8 @@ export type ProjectApplicationStatus =
   | "DEPLOYING"
   | "DEPLOYED"
   | "FAILED"
-  | "ARCHIVED";
+  | "ARCHIVED"
+  | "REMOVED_REMOTE";
 
 export type ProjectApplicationType =
   | "FRONTEND"
@@ -48,6 +56,11 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
+  terminatedAt?: string;
+  terminatedBy?: string;
+  terminationStatus?: string;
+  lastTerminationError?: string;
+  terminationPending?: TerminationPendingItem[];
   recordCount?: number;
   databaseCount?: number;
   applicationCount?: number;
@@ -118,6 +131,19 @@ export interface ProjectApplication {
   lastDeployStatus?: string;
   lastDeployMessage?: string;
   lastCoolifySyncAt?: string;
+  destroyedAt?: string;
+  destroyedBy?: string;
+  destroyStatus?: string;
+  lastDestroyError?: string;
+}
+
+export type TerminationPendingItemType = "dns" | "coolify_app" | "coolify_project" | "database";
+
+export interface TerminationPendingItem {
+  type: TerminationPendingItemType;
+  id: string;
+  label?: string;
+  error: string;
 }
 
 export interface ProjectApplicationFormInput {

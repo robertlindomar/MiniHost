@@ -120,7 +120,7 @@ export function validateProjectInput(input: ProjectFormInput) {
     errors.push("Domínio principal deve parecer um domínio válido.");
   }
 
-  if (!validStatuses.includes(input.status)) {
+  if (!validStatuses.includes(input.status as (typeof validStatuses)[number])) {
     errors.push("Status do projeto inválido.");
   }
 

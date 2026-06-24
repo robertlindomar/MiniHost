@@ -9,7 +9,8 @@ const statusConfig: Record<ProjectApplicationStatus, { label: string; variant: "
   DEPLOYING: { label: "Em deploy", variant: "warning" },
   DEPLOYED: { label: "Deploy feito", variant: "success" },
   FAILED: { label: "Falha", variant: "danger" },
-  ARCHIVED: { label: "Arquivada", variant: "warning" }
+  ARCHIVED: { label: "Arquivada", variant: "warning" },
+  REMOVED_REMOTE: { label: "Removida no Coolify", variant: "danger" }
 };
 
 const typeLabels: Record<ProjectApplicationType, string> = {
