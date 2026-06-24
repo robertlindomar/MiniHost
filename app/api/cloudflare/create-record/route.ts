@@ -1,11 +1,9 @@
-import { CloudflareApiError, createDnsRecord, listDnsRecords } from "@/lib/cloudflare";
+import { CloudflareApiError } from "@/lib/cloudflare";
 import { prisma } from "@/lib/prisma";
-import { writeAudit } from "@/lib/server/audit";
-import { CloudflareTokenError, getCloudflareToken } from "@/lib/server/cloudflare-credential";
-import { findDnsRecordConflict, toCloudflareRecordName, toComparableRecordName } from "@/lib/server/dns-records";
+import { CloudflareDnsRecordError, createCloudflareDnsRecord } from "@/lib/server/cloudflare-dns-record";
+import { CloudflareTokenError } from "@/lib/server/cloudflare-credential";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
-import { toDnsRecord } from "@/lib/server/mappers";
 import { validateDnsRecordBody } from "@/lib/server/validation";
 import type { DnsRecordFormInput, DnsRecordType } from "@/lib/types";
 
@@ -30,10 +28,6 @@ function normalizeRecordInput(body: CreateCloudflareRecordBody): DnsRecordFormIn
   };
 }
 
-function shouldSendProxied(type: string) {
-  return type === "A" || type === "AAAA" || type === "CNAME";
-}
-
 export async function POST(request: Request) {
   let userId: string | undefined;
   let domainId: string | undefined;
@@ -53,129 +47,30 @@ export async function POST(request: Request) {
       return fail(errors.join(" "));
     }
 
-    const domain = await prisma.domain.findUnique({ where: { id: data.domainId } });
+    const action = body.fromProjectTemplate
+      ? "DNS_RECORD_CREATE_FROM_PROJECT_TEMPLATE"
+      : body.templateName
+        ? "DNS_RECORD_CREATE_FROM_TEMPLATE_CLOUDFLARE"
+        : "DNS_RECORD_CREATE_CLOUDFLARE";
 
-    if (!domain) {
-      return fail("Domínio não encontrado.", 404);
-    }
+    const description = body.fromProjectTemplate
+      ? `Registro ${data.type} ${data.name} criado na Cloudflare pelo template ${body.templateName} no projeto.`
+      : body.templateName
+        ? `Registro ${data.type} ${data.name} criado na Cloudflare pelo template ${body.templateName}.`
+        : `Registro ${data.type} ${data.name} criado na Cloudflare.`;
 
-    domainName = domain.name;
-
-    if (!domain.zoneId) {
-      return fail("Para criar registro real na Cloudflare, configure o Zone ID deste domínio.");
-    }
-
-    if (data.projectId) {
-      const project = await prisma.project.findUnique({ where: { id: data.projectId } });
-
-      if (!project) {
-        return fail("Projeto não encontrado.", 404);
-      }
-
-      if (project.status === "ARCHIVED") {
-        return fail("Não é possível vincular registros a um projeto arquivado.");
-      }
-    }
-
-    const localRecords = await prisma.dnsRecord.findMany({
-      where: { domainId: domain.id, status: { not: "DELETED" } },
-      select: {
-        id: true,
-        type: true,
-        name: true
-      }
-    });
-    const localConflict = findDnsRecordConflict(localRecords, data, domain.name);
-
-    if (localConflict) {
-      return fail(localConflict);
-    }
-
-    const apiToken = await getCloudflareToken();
-    const cloudflareRecords = await listDnsRecords(domain.zoneId, apiToken);
-    const cloudflareConflict = findDnsRecordConflict(cloudflareRecords, data, domain.name);
-
-    if (cloudflareConflict) {
-      return fail(cloudflareConflict);
-    }
-
-    const cloudflareName = toCloudflareRecordName(data.name, domain.name);
-    const cloudflareRecord = await createDnsRecord(domain.zoneId, {
-      type: data.type,
-      name: cloudflareName,
-      content: data.content,
-      ttl: data.ttl ?? 1,
-      proxied: shouldSendProxied(data.type) ? data.proxied : false,
-      priority: data.type === "MX" && data.priority !== null ? data.priority : undefined,
-      comment: data.comment
-    }, apiToken);
-    const syncedAt = new Date();
-
-    const savedRecord = await prisma.$transaction(async (tx) => {
-      const created = await tx.dnsRecord.create({
-        data: {
-          domainId: domain.id,
-          projectId: data.projectId,
-          type: cloudflareRecord.type,
-          name: toComparableRecordName(cloudflareRecord.name, domain.name),
-          content: cloudflareRecord.content,
-          ttl: cloudflareRecord.ttl === 1 ? null : cloudflareRecord.ttl,
-          proxied: Boolean(cloudflareRecord.proxied),
-          status: "active",
-          comment: data.comment,
-          priority: cloudflareRecord.priority ?? data.priority,
-          cloudflareRecordId: cloudflareRecord.id,
-          source: "cloudflare",
-          lastSyncedAt: syncedAt
-        },
-        include: {
-          project: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      });
-
-      const action = body.fromProjectTemplate
-        ? "DNS_RECORD_CREATE_FROM_PROJECT_TEMPLATE"
-        : body.templateName
-          ? "DNS_RECORD_CREATE_FROM_TEMPLATE_CLOUDFLARE"
-          : "DNS_RECORD_CREATE_CLOUDFLARE";
-
-      const description = body.fromProjectTemplate
-        ? `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name} pelo template ${body.templateName} no projeto.`
-        : body.templateName
-          ? `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name} pelo template ${body.templateName}.`
-          : `Registro ${created.type} ${created.name} criado na Cloudflare para ${domain.name}.`;
-
-      await writeAudit(tx, {
-        action,
-        entityType: "record",
-        entityId: created.id,
-        entityName: `${created.type} ${created.name}`,
-        userId,
-        description,
-        newData: {
-          domain: domain.name,
-          templateName: body.templateName,
-          projectId: data.projectId,
-          projectName: created.project?.name,
-          type: created.type,
-          name: created.name,
-          content: created.content,
-          cloudflareRecordId: created.cloudflareRecordId
-        }
-      });
-
-      return created;
+    const result = await createCloudflareDnsRecord({
+      userId,
+      domainId: data.domainId,
+      data,
+      auditAction: action,
+      auditDescription: description
     });
 
     return ok(
       {
         message: "Registro criado na Cloudflare com sucesso.",
-        record: toDnsRecord(savedRecord)
+        record: result.record
       },
       { status: 201 }
     );
@@ -208,6 +103,10 @@ export async function POST(request: Request) {
           }
         })
         .catch(() => undefined);
+    }
+
+    if (error instanceof CloudflareDnsRecordError) {
+      return fail(error.message, 400);
     }
 
     if (error instanceof CloudflareTokenError) {

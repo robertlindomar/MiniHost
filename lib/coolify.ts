@@ -281,6 +281,42 @@ export async function listCoolifyProjects() {
   return extractArray(payload, "projects");
 }
 
+export type CreatedCoolifyProject = {
+  uuid: string;
+  name: string;
+};
+
+export async function createCoolifyProject(input: { name: string; description?: string }) {
+  const name = input.name.trim();
+
+  if (!name) {
+    throw new CoolifyApiError("Informe o nome do projeto Coolify.");
+  }
+
+  const response = await coolifyRequest("/projects", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      ...(input.description?.trim() ? { description: input.description.trim() } : {})
+    })
+  });
+
+  if (!isRecord(response)) {
+    throw new CoolifyApiError("Resposta inválida ao criar projeto no Coolify.");
+  }
+
+  const uuid = readString(response, ["uuid", "id", "project_uuid"]);
+
+  if (!uuid) {
+    throw new CoolifyApiError("Coolify não retornou o identificador do projeto criado.");
+  }
+
+  return {
+    uuid,
+    name
+  } satisfies CreatedCoolifyProject;
+}
+
 export async function listCoolifyApplications() {
   const payload = await coolifyRequest("/applications");
   return extractArray(payload, "applications");

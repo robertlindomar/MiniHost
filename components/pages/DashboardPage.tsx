@@ -1,6 +1,7 @@
 "use client";
 
-import { Clock3, Database, FolderKanban, Globe2, Layers3, Link2Off, Rocket, Server, ShieldCheck } from "lucide-react";
+import { Clock3, Database, FolderKanban, Globe2, Layers3, Link2Off, Rocket, Server, ShieldCheck, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { QuickTemplatesCard } from "@/components/dashboard/QuickTemplatesCard";
@@ -147,6 +148,29 @@ export function DashboardPage() {
       />
 
       {error ? <Notice type="error" message={error} /> : null}
+
+      <section className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-white p-5 shadow-soft">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="rounded-2xl bg-violet-600 p-3 text-white">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-950">Publicar novo projeto</h2>
+              <p className="mt-1 max-w-2xl text-sm text-zinc-600">
+                Publique uma página estática em uma única jornada: projeto, DNS, Coolify e deploy.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/publicar"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700"
+          >
+            <Sparkles className="h-4 w-4" />
+            Publicar novo projeto
+          </Link>
+        </div>
+      </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard

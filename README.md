@@ -4,6 +4,50 @@ MiniHost é um painel web para organizar domínios, registros DNS, projetos, ban
 
 Hoje o painel integra com PostgreSQL (metadados e provisionamento real), Cloudflare (sincronização e CRUD de DNS) e Coolify (sincronização de recursos e criação de aplicações a partir de repositórios públicos). O objetivo futuro é evoluir para deploy automatizado completo com repositórios privados e ações destrutivas controladas.
 
+## Etapa 15 implementada
+
+- Nova área **Publicar** (`/publicar`) com fluxo unificado para aplicações **Static**.
+- Wizard em uma única página com seções: Projeto, Domínio/DNS, Aplicação Static, Coolify e Revisão.
+- Orquestrador `POST /api/publish/static` reutilizando serviços existentes (projeto, DNS Cloudflare, aplicação planejada, Coolify, envs, deploy e sync).
+- Confirmação forte: `publicar slug-do-projeto`.
+- Checklist de execução com status por etapa: Pendente, Executando, Sucesso, Erro, Ignorado.
+- Tratamento de falha parcial: mostra o que foi criado e orienta continuar no modo avançado.
+- Item **Publicar** no menu lateral e atalho **Publicar novo projeto** no Dashboard.
+- AuditLog:
+  - `STATIC_PUBLISH_START`
+  - `STATIC_PUBLISH_PROJECT_CREATED`
+  - `STATIC_PUBLISH_DNS_CREATED`
+  - `STATIC_PUBLISH_DNS_LINKED`
+  - `STATIC_PUBLISH_APPLICATION_CREATED`
+  - `STATIC_PUBLISH_COOlify_PROJECT_CREATED`
+  - `STATIC_PUBLISH_COOlify_CREATED`
+  - `STATIC_PUBLISH_ENVS_APPLIED`
+  - `STATIC_PUBLISH_DEPLOY_STARTED`
+  - `STATIC_PUBLISH_SYNC_COMPLETED`
+  - `STATIC_PUBLISH_SUCCESS`
+  - `STATIC_PUBLISH_FAILED`
+
+**Importante:** esta etapa cobre apenas **Static** com repositório público HTTPS. Backend, Fullstack, repositório privado e criação de banco PostgreSQL ficam para etapas futuras. As telas antigas (**Projetos**, **Domínios**, **Registros DNS**, **Coolify**, detalhes da aplicação) continuam como **modo avançado**.
+
+### Como usar o fluxo Publicar
+
+1. Acesse **Publicar** no menu ou **Publicar novo projeto** no Dashboard.
+2. Preencha projeto, DNS (criar, vincular existente ou pular), aplicação Static e destino Coolify.
+3. Revise o preview e confirme com `publicar slug-do-projeto`.
+4. Clique em **Executar publicação** e acompanhe o checklist.
+5. Ao final, use os links para abrir o projeto, o site ou o Coolify.
+
+### Exemplo Static
+
+- Projeto: `Portfolio` / slug `portfolio`
+- DNS: criar registro `A` `portfolio` → IP da VPS (default das Configurações)
+- App: repo público Vite, `npm run build`, output `/dist`
+- Coolify: criar app, aplicar envs (se houver), deploy e sincronizar
+
+### Falha parcial
+
+Se uma etapa falhar após criar recursos anteriores, o MiniHost **não apaga** o que já foi criado. A tela de resultado mostra o checklist, o que foi salvo e botões para abrir o projeto e continuar manualmente em **Projetos** → detalhes da aplicação.
+
 ## Etapa 14 implementada
 
 - Criação de aplicação **real** no Coolify a partir de uma `ProjectApplication` planejada.

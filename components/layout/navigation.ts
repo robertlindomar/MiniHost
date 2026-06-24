@@ -7,6 +7,7 @@ import {
   ListTree,
   Rocket,
   Settings,
+  Sparkles,
   type LucideIcon
 } from "lucide-react";
 
@@ -18,6 +19,7 @@ export interface NavigationItem {
 
 export const navigation: NavigationItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/publicar", label: "Publicar", icon: Sparkles },
   { href: "/domains", label: "Domínios", icon: Globe2 },
   { href: "/projects", label: "Projetos", icon: FolderKanban },
   { href: "/records", label: "Registros DNS", icon: ListTree },
@@ -36,6 +38,10 @@ export const pageMetaByHref: Record<string, PageMeta> = {
   "/dashboard": {
     title: "Visão geral",
     description: "Acompanhe domínios, registros DNS e atividade recente da plataforma."
+  },
+  "/publicar": {
+    title: "Publicar",
+    description: "Publique uma página estática em uma única jornada guiada."
   },
   "/domains": {
     title: "Domínios cadastrados",

@@ -8,6 +8,7 @@ type RecordLike = {
 
 export type ValidatedDnsRecordData = {
   domainId: string;
+  projectId?: string | null;
   type: string;
   name: string;
   content: string;
@@ -51,6 +52,21 @@ export function toComparableRecordName(name: string, domainName: string) {
   }
 
   return normalized;
+}
+
+export function buildRecordFqdn(recordName: string, domainName: string) {
+  const normalizedName = recordName.trim().toLowerCase();
+  const normalizedDomain = domainName.trim().toLowerCase();
+
+  if (!normalizedName || normalizedName === "@") {
+    return normalizedDomain;
+  }
+
+  if (normalizedName === normalizedDomain || normalizedName.endsWith(`.${normalizedDomain}`)) {
+    return normalizedName;
+  }
+
+  return `${normalizedName}.${normalizedDomain}`;
 }
 
 function isAddressRecord(type: string) {
