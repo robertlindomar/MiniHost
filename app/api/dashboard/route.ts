@@ -16,6 +16,9 @@ export async function GET(request: Request) {
       missingCoolifyResourcesCount,
       removedCoolifyResourcesCount,
       brokenCoolifyProjectLinksCount,
+      projectsWithCoolifyLinkCount,
+      projectsWithoutCoolifyLinkCount,
+      projectsWithInconsistencyCount,
       plannedApplicationsCount,
       linkedApplicationsCount,
       failedApplicationsCount,
@@ -71,22 +74,39 @@ export async function GET(request: Request) {
           status: { not: "ARCHIVED" },
           coolifyLink: {
             is: {
-              OR: [
-                {
-                  coolifyProject: {
-                    is: {
-                      status: { in: ["MISSING", "REMOVED"] }
-                    }
-                  }
-                },
-                {
-                  coolifyApplication: {
-                    is: {
-                      status: { in: ["MISSING", "REMOVED"] }
-                    }
-                  }
+              coolifyProject: {
+                is: {
+                  status: { in: ["MISSING", "REMOVED"] }
                 }
-              ]
+              }
+            }
+          }
+        }
+      }),
+      prisma.project.count({
+        where: {
+          status: { not: "ARCHIVED" },
+          coolifyLink: {
+            is: {
+              coolifyProjectCacheId: { not: null }
+            }
+          }
+        }
+      }),
+      prisma.project.count({
+        where: {
+          status: { not: "ARCHIVED" },
+          OR: [{ coolifyLink: { is: null } }, { coolifyLink: { is: { coolifyProjectCacheId: null } } }]
+        }
+      }),
+      prisma.project.count({
+        where: {
+          status: { not: "ARCHIVED" },
+          coolifyLink: { is: null },
+          applications: {
+            some: {
+              archivedAt: null,
+              coolifyProjectId: { not: null }
             }
           }
         }
@@ -125,7 +145,10 @@ export async function GET(request: Request) {
         activeResources: activeCoolifyResourcesCount,
         missingResources: missingCoolifyResourcesCount,
         removedResources: removedCoolifyResourcesCount,
-        brokenProjectLinks: brokenCoolifyProjectLinksCount
+        brokenProjectLinks: brokenCoolifyProjectLinksCount,
+        projectsWithCoolifyLink: projectsWithCoolifyLinkCount,
+        projectsWithoutCoolifyLink: projectsWithoutCoolifyLinkCount,
+        projectsWithInconsistency: projectsWithInconsistencyCount
       },
       applicationSummary: {
         planned: plannedApplicationsCount,

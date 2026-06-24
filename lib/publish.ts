@@ -7,6 +7,7 @@ export type StaticPublishStepId =
   | "dns"
   | "application"
   | "coolify_project"
+  | "coolify_project_link"
   | "coolify_create"
   | "envs"
   | "deploy"

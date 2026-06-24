@@ -1,4 +1,5 @@
 import { createCoolifyProject, CoolifyApiError } from "@/lib/coolify";
+import { isCoolifyResourceCreatedByMiniHost, mergeCoolifyResourceRawDataSource } from "@/lib/server/coolify-resource";
 import { isPublicGitRepository } from "@/lib/coolify-provision";
 import { buildCoolifyApplicationUrl } from "@/lib/coolify-provision";
 import { prisma } from "@/lib/prisma";
@@ -19,6 +20,7 @@ import {
 } from "@/lib/server/coolify-application-provisioner";
 import { syncProjectApplicationCoolifyStatus } from "@/lib/server/coolify-application-post-provision";
 import { syncCoolifyResources } from "@/lib/server/coolify-cache";
+import { ensureProjectCoolifyProject } from "@/lib/server/project-coolify-project";
 import { buildRecordFqdn } from "@/lib/server/dns-records";
 import { defaultSettings, toDnsRecord, toProject, toProjectApplication, toSettings } from "@/lib/server/mappers";
 import {
@@ -62,6 +64,7 @@ const STEP_LABELS: Record<StaticPublishStepId, string> = {
   dns: "Criar/vincular DNS",
   application: "Criar aplicação planejada",
   coolify_project: "Criar projeto no Coolify",
+  coolify_project_link: "Vincular projeto Coolify ao MiniHost",
   coolify_create: "Criar aplicação no Coolify",
   envs: "Aplicar variáveis no Coolify",
   deploy: "Iniciar deploy",
@@ -269,6 +272,15 @@ async function resolveCoolifyProjectCacheId(input: {
   });
 
   if (cached) {
+    if (!isCoolifyResourceCreatedByMiniHost(cached.rawData)) {
+      await prisma.coolifyProject.update({
+        where: { id: cached.id },
+        data: {
+          rawData: mergeCoolifyResourceRawDataSource(cached.rawData, "minihost-publish")
+        }
+      });
+    }
+
     await writeAudit(prisma, {
       action: "STATIC_PUBLISH_COOlify_PROJECT_CREATED",
       entityType: "coolify",
@@ -433,6 +445,7 @@ export async function publishStaticApplication(input: StaticPublishInput, userId
     createStep("dns", normalized.dns.mode === "skip" ? "pending" : "pending"),
     createStep("application", "pending"),
     createStep("coolify_project", normalized.coolify.createApplication ? "pending" : "pending"),
+    createStep("coolify_project_link", normalized.coolify.createApplication ? "pending" : "pending"),
     createStep("coolify_create", normalized.coolify.createApplication ? "pending" : "pending"),
     createStep("envs", "pending"),
     createStep("deploy", "pending"),
@@ -654,6 +667,7 @@ export async function publishStaticApplication(input: StaticPublishInput, userId
 
     if (!normalized.coolify.createApplication) {
       setStep("coolify_project", "skipped", "Criação no Coolify não solicitada.");
+      setStep("coolify_project_link", "skipped", "Criação no Coolify não solicitada.");
       setStep("coolify_create", "skipped", "Criação no Coolify não solicitada.");
       setStep("envs", "skipped", "Sem criação no Coolify.");
       setStep("deploy", "skipped", "Sem criação no Coolify.");
@@ -680,8 +694,21 @@ export async function publishStaticApplication(input: StaticPublishInput, userId
         "coolify_project",
         "success",
         normalized.coolify.projectMode === "existing"
-          ? `Projeto Coolify ${coolifyProject?.name ?? "selecionado"} vinculado.`
+          ? `Projeto Coolify ${coolifyProject?.name ?? "selecionado"} selecionado.`
           : `Projeto Coolify ${coolifyProject?.name ?? normalized.coolify.projectName} criado.`
+      );
+
+      setStep("coolify_project_link", "running");
+
+      await ensureProjectCoolifyProject(createdProject.id, coolifyProjectCacheId, userId, {
+        source: "PUBLISH",
+        createdByMiniHost: normalized.coolify.projectMode === "create"
+      });
+
+      setStep(
+        "coolify_project_link",
+        "success",
+        "Projeto Coolify vinculado ao projeto MiniHost."
       );
 
       setStep("coolify_create", "running");

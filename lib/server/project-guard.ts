@@ -127,14 +127,16 @@ export function assertCoolifyProjectDeletionAllowed(input: {
   coolifyProject: { name: string; rawData?: unknown };
   deleteCoolifyProject: boolean;
   confirmExternalRemoval?: boolean;
+  createdByMiniHost?: boolean;
 }) {
   if (!input.deleteCoolifyProject) {
     return;
   }
 
-  const createdByMiniHost = isCoolifyResourceCreatedByMiniHost(input.coolifyProject.rawData);
+  const wasCreatedByMiniHost =
+    input.createdByMiniHost ?? isCoolifyResourceCreatedByMiniHost(input.coolifyProject.rawData);
 
-  if (!createdByMiniHost && !input.confirmExternalRemoval) {
+  if (!wasCreatedByMiniHost && !input.confirmExternalRemoval) {
     throw new ProjectGuardError(
       `O projeto Coolify "${input.coolifyProject.name}" não foi criado pelo MiniHost. Confirme explicitamente para remover.`
     );

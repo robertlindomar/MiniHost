@@ -26,6 +26,9 @@ interface DashboardResponse {
     missingResources: number;
     removedResources: number;
     brokenProjectLinks: number;
+    projectsWithCoolifyLink: number;
+    projectsWithoutCoolifyLink: number;
+    projectsWithInconsistency: number;
   };
   applicationSummary?: {
     planned: number;
@@ -45,7 +48,10 @@ export function DashboardPage() {
     activeResources: 0,
     missingResources: 0,
     removedResources: 0,
-    brokenProjectLinks: 0
+    brokenProjectLinks: 0,
+    projectsWithCoolifyLink: 0,
+    projectsWithoutCoolifyLink: 0,
+    projectsWithInconsistency: 0
   });
   const [applicationSummary, setApplicationSummary] = useState({
     planned: 0,
@@ -66,14 +72,15 @@ export function DashboardPage() {
         setProjects(data.projects);
         setDatabases(data.databases);
         setHistory(data.history);
-        setCoolifySummary(
-          data.coolifySummary ?? {
-            activeResources: 0,
-            missingResources: 0,
-            removedResources: 0,
-            brokenProjectLinks: 0
-          }
-        );
+        setCoolifySummary({
+          activeResources: data.coolifySummary?.activeResources ?? 0,
+          missingResources: data.coolifySummary?.missingResources ?? 0,
+          removedResources: data.coolifySummary?.removedResources ?? 0,
+          brokenProjectLinks: data.coolifySummary?.brokenProjectLinks ?? 0,
+          projectsWithCoolifyLink: data.coolifySummary?.projectsWithCoolifyLink ?? 0,
+          projectsWithoutCoolifyLink: data.coolifySummary?.projectsWithoutCoolifyLink ?? 0,
+          projectsWithInconsistency: data.coolifySummary?.projectsWithInconsistency ?? 0
+        });
         setApplicationSummary(
           data.applicationSummary ?? {
             planned: 0,
@@ -308,6 +315,33 @@ export function DashboardPage() {
           description="Ainda sem aplicação real no Coolify"
           icon={<ShieldCheck className="h-5 w-5" />}
           tone="emerald"
+          isLoading={isLoading}
+        />
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard
+          title="Projetos com Coolify"
+          value={coolifySummary.projectsWithCoolifyLink ?? 0}
+          description="Projeto MiniHost vinculado a um CoolifyProject"
+          icon={<FolderKanban className="h-5 w-5" />}
+          tone="emerald"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Projetos sem Coolify"
+          value={coolifySummary.projectsWithoutCoolifyLink ?? 0}
+          description="Ainda sem ProjectCoolifyLink"
+          icon={<Link2Off className="h-5 w-5" />}
+          tone="amber"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Projetos inconsistentes"
+          value={coolifySummary.projectsWithInconsistency ?? 0}
+          description="Apps com projeto Coolify mas sem link no projeto"
+          icon={<ShieldCheck className="h-5 w-5" />}
+          tone="violet"
           isLoading={isLoading}
         />
       </section>

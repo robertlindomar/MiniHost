@@ -56,25 +56,26 @@ export function CreateCoolifyApplicationModal({
   onConfirm
 }: CreateCoolifyApplicationModalProps) {
   const [coolifyServerId, setCoolifyServerId] = useState("");
-  const [coolifyProjectId, setCoolifyProjectId] = useState("");
   const [confirmationText, setConfirmationText] = useState("");
   const [applyEnvsAfterCreate, setApplyEnvsAfterCreate] = useState(false);
   const [deployAfterCreate, setDeployAfterCreate] = useState(false);
   const [wasCopied, setWasCopied] = useState(false);
 
+  const linkedCoolifyProject = project?.coolifyLink?.coolifyProject;
+
   useEffect(() => {
     if (isOpen && application) {
       setCoolifyServerId(application.coolifyServer?.id ?? servers[0]?.id ?? "");
-      setCoolifyProjectId(application.coolifyProject?.id ?? projects[0]?.id ?? "");
       setConfirmationText("");
       setApplyEnvsAfterCreate(false);
       setDeployAfterCreate(false);
       setWasCopied(false);
     }
-  }, [isOpen, application?.id, application?.coolifyServer?.id, application?.coolifyProject?.id, servers, projects]);
+  }, [isOpen, application?.id, application?.coolifyServer?.id, servers]);
 
   const selectedServer = servers.find((server) => server.id === coolifyServerId);
-  const selectedProject = projects.find((item) => item.id === coolifyProjectId);
+  const coolifyProjectId = linkedCoolifyProject?.id ?? "";
+  const selectedProject = linkedCoolifyProject;
   const expectedText = application ? buildApplicationProvisionConfirmationText(application.slug) : "";
   const isValidConfirmation = confirmationText === expectedText;
 
@@ -93,9 +94,10 @@ export function CreateCoolifyApplicationModal({
       coolifyProjectId,
       hasCoolifyCredential,
       hasActiveServer: selectedServer?.status === "ACTIVE",
-      hasActiveProject: selectedProject?.status === "ACTIVE"
+      hasActiveProject: selectedProject?.status === "ACTIVE",
+      hasProjectCoolifyLink: Boolean(linkedCoolifyProject)
     });
-  }, [application, coolifyServerId, coolifyProjectId, hasCoolifyCredential, selectedProject, selectedServer]);
+  }, [application, coolifyServerId, coolifyProjectId, hasCoolifyCredential, selectedProject, selectedServer, linkedCoolifyProject]);
 
   async function copyConfirmationText(text: string) {
     try {
@@ -118,8 +120,15 @@ export function CreateCoolifyApplicationModal({
       <div className="space-y-5">
         <Notice
           type="info"
-          message="Será criada uma aplicação real no Coolify a partir de um repositório público. Criar a aplicação não inicia deploy automaticamente — aplique variáveis e execute deploy em etapas separadas, se desejar."
+          message="Será criada uma aplicação real no Coolify a partir de um repositório público. O projeto Coolify é herdado do projeto MiniHost. Criar a aplicação não inicia deploy automaticamente — aplique variáveis e execute deploy em etapas separadas, se desejar."
         />
+
+        {!linkedCoolifyProject ? (
+          <Notice
+            type="error"
+            message="Crie ou vincule um projeto Coolify na seção do projeto antes de provisionar aplicações."
+          />
+        ) : null}
 
         <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
           <p className="text-sm font-semibold text-zinc-950">Destino Coolify</p>
@@ -141,20 +150,10 @@ export function CreateCoolifyApplicationModal({
               </select>
             </label>
             <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase text-zinc-500">Projeto</span>
-              <select
-                value={coolifyProjectId}
-                disabled={isSubmitting}
-                onChange={(event) => setCoolifyProjectId(event.target.value)}
-                className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-200"
-              >
-                <option value="">Selecione</option>
-                {projects.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
+              <span className="text-xs font-semibold uppercase text-zinc-500">Projeto Coolify (herdado)</span>
+              <p className="rounded-md border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-800">
+                {linkedCoolifyProject?.name ?? "Nenhum projeto Coolify vinculado ao projeto MiniHost"}
+              </p>
             </label>
             <div className="md:col-span-2">
               <p className="text-xs font-semibold uppercase text-zinc-500">Ambiente</p>

@@ -15,6 +15,32 @@ Hoje o painel integra com PostgreSQL (metadados e provisionamento real), Cloudfl
 - Proteções: slug `minihost`, banco/usuário `postgres`/`minihost`, domínio raiz do painel (não subdomínios), registro DNS apex `@` do painel, apps MiniHost.
 - AuditLog `PROJECT_TERMINATE_*` sem dados sensíveis.
 
+## Etapa 17 implementada
+
+### Modelo mental do MiniHost
+
+**1 Project MiniHost = 1 CoolifyProject; N aplicações dentro; DNS e bancos no projeto MiniHost.**
+
+- `ProjectCoolifyLink` vincula apenas **projeto MiniHost → CoolifyProject** (sem `coolifyApplicationCacheId`).
+- Campos novos: `source` (`PUBLISH`, `MANUAL_LINK`, `BACKFILL`, `IMPORT`) e `createdByMiniHost`.
+- Serviço central `lib/server/project-coolify-project.ts`: `ensureProjectCoolifyProject`, backfill automático, detecção e correção de inconsistências.
+- **Publicar** e o provisioner de aplicações chamam `ensureProjectCoolifyProject` após criar/selecionar o projeto Coolify.
+- Na UI do projeto: card único **Projeto Coolify deste projeto** (sem seletor de app Coolify no nível do projeto).
+- Nas aplicações: o projeto Coolify é **herdado** do projeto MiniHost — não há picker de projeto por app.
+- Encerramento usa `ProjectCoolifyLink` como fonte principal para localizar o projeto Coolify (fallback legado via apps vinculadas).
+
+### Backfill e inconsistências
+
+- Ao abrir o detalhe do projeto, o MiniHost tenta backfill seguro quando detecta inconsistência (ex.: apps com `coolifyProjectId` mas sem link no projeto).
+- A seção Coolify mostra alertas e permite corrigir via `POST /api/projects/[id]/coolify-project/fix`.
+- Dashboard exibe cards: projetos com/sem Coolify, inconsistentes e vínculos quebrados.
+
+### Fluxo recomendado
+
+1. Crie ou vincule o **projeto Coolify** no card do projeto MiniHost (ou use **Publicar**, que cria o link automaticamente).
+2. Planeje aplicações na seção **Aplicações** — elas usam o mesmo CoolifyProject.
+3. Crie ou vincule cada aplicação no Coolify individualmente (servidor + app; projeto herdado).
+
 ## Etapa 15 implementada
 
 - Nova área **Publicar** (`/publicar`) com fluxo unificado para aplicações **Static**.
@@ -189,7 +215,7 @@ Esse vínculo muda a aplicação local para `LINKED`, mas não executa deploy ne
 
 - Model `CoolifyCredential` no Prisma com URL base, token criptografado, status e último teste.
 - Models de cache `CoolifyServer`, `CoolifyProject` e `CoolifyApplication`, com status local, status remoto, última presença e marcação de removidos.
-- Model `ProjectCoolifyLink` para vincular um projeto MiniHost a um projeto/aplicação Coolify sincronizado.
+- Model `ProjectCoolifyLink` para vincular um projeto MiniHost a um projeto Coolify sincronizado (desde a Etapa 17, apenas CoolifyProject — ver seção Etapa 17).
 - Serviço backend `lib/coolify.ts` para listar servidores, projetos e aplicações via API do Coolify.
 - Rotas protegidas:
   - `POST /api/settings/coolify` para salvar URL/token.
@@ -253,8 +279,8 @@ Na página **Coolify**, o filtro padrão mostra apenas **Ativos**. Use os filtro
 
 1. Sincronize recursos na página **Coolify**.
 2. Abra um projeto MiniHost em **Projetos**.
-3. Na seção **Coolify**, selecione o projeto e/ou aplicação sincronizada.
-4. Clique em **Salvar vínculo**.
+3. Na seção **Projeto Coolify deste projeto**, selecione o projeto Coolify sincronizado.
+4. Clique em **Vincular projeto Coolify**.
 
 Esse vínculo é apenas organizacional nesta etapa. Ele não executa deploy nem modifica o Coolify.
 
@@ -664,7 +690,7 @@ Por padrão, o modal marca:
 - Arquivar projeto no MiniHost
 - Excluir DNS Cloudflare vinculados
 - Excluir aplicações no Coolify
-- Excluir projeto Coolify (se foi criado pelo MiniHost)
+- Excluir projeto Coolify (via `ProjectCoolifyLink`; se foi criado pelo MiniHost)
 - **Não** desprovisionar bancos PostgreSQL
 
 #### Por que bancos não são removidos por padrão

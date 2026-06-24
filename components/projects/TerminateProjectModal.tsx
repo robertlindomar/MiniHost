@@ -137,7 +137,11 @@ export function TerminateProjectModal({
             deleteCoolifyApplications: data.pending.some((item) => item.type === "coolify_app"),
             deleteCoolifyProject: data.pending.some((item) => item.type === "coolify_project"),
             destroyDatabases: data.pending.some((item) => item.type === "database"),
-            confirmExternalCoolifyRemoval: false
+            confirmExternalCoolifyRemoval: data.pending.some(
+              (item) =>
+                item.type === "coolify_project" &&
+                item.error.toLowerCase().includes("não foi criado pelo minihost")
+            )
           });
         } else {
           setOptions({

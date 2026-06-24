@@ -11,6 +11,12 @@ import {
 } from "@/lib/server/coolify-application-post-provision";
 import { syncCoolifyResources } from "@/lib/server/coolify-cache";
 import {
+  assertApplicationUsesProjectCoolifyProject,
+  ensureProjectCoolifyProject,
+  getProjectCoolifyLink
+} from "@/lib/server/project-coolify-project";
+import { isCoolifyResourceCreatedByMiniHost } from "@/lib/server/coolify-resource";
+import {
   decryptEnvironmentVariables,
   sanitizeEnvVariablesForAudit,
   sanitizeProjectApplicationForAudit
@@ -98,6 +104,17 @@ export async function provisionCoolifyApplication(input: {
 
   if (coolifyProject.status !== "ACTIVE") {
     throw new CoolifyApplicationProvisionerError("Projeto Coolify selecionado está ausente ou removido. Sincronize novamente.");
+  }
+
+  const existingLink = await getProjectCoolifyLink(application.projectId);
+
+  if (!existingLink?.coolifyProjectCacheId) {
+    await ensureProjectCoolifyProject(application.projectId, input.coolifyProjectId, input.userId, {
+      source: "IMPORT",
+      createdByMiniHost: isCoolifyResourceCreatedByMiniHost(coolifyProject.rawData)
+    });
+  } else {
+    await assertApplicationUsesProjectCoolifyProject(application.projectId, input.coolifyProjectId);
   }
 
   const environmentVariables = decryptEnvironmentVariables(application.environmentVariablesEncrypted);
@@ -215,6 +232,19 @@ export async function provisionCoolifyApplication(input: {
         description: `Aplicação ${saved.name} provisionada no Coolify.`,
         oldData: sanitizeProjectApplicationForAudit(application),
         newData: sanitizeProjectApplicationForAudit(saved)
+      });
+
+      await writeAudit(tx, {
+        action: "PROJECT_APPLICATION_COOlify_PROJECT_INHERITED",
+        entityType: "project_application",
+        entityId: saved.id,
+        entityName: saved.name,
+        userId: input.userId,
+        description: `Aplicação ${saved.name} vinculada ao projeto Coolify do projeto MiniHost.`,
+        newData: {
+          coolifyProjectId: coolifyProject.id,
+          coolifyProjectName: coolifyProject.name
+        }
       });
 
       return saved;

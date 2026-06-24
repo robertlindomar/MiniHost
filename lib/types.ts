@@ -380,9 +380,29 @@ export interface ProjectCoolifyLink {
   id: string;
   projectId: string;
   coolifyProject?: CoolifyProjectCache;
-  coolifyApplication?: CoolifyApplicationCache;
+  source?: string;
+  createdByMiniHost?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ProjectCoolifyInconsistencyCode =
+  | "MISSING_PROJECT_LINK"
+  | "LINK_APP_MISMATCH"
+  | "APPS_DIFFERENT_PROJECTS"
+  | "LINK_POINTS_TO_REMOVED"
+  | "APP_POINTS_TO_REMOVED";
+
+export interface ProjectCoolifyInconsistency {
+  code: ProjectCoolifyInconsistencyCode;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface ProjectCoolifyInconsistencyReport {
+  hasInconsistency: boolean;
+  items: ProjectCoolifyInconsistency[];
+  suggestedCoolifyProjectIds: string[];
 }
 
 export interface ProjectDatabasePermissionDetail {

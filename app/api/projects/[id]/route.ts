@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
+import { backfillProjectCoolifyLink, detectProjectCoolifyInconsistencies, repairProjectCoolifyLinkCreatedByMiniHost } from "@/lib/server/project-coolify-project";
 import { toDnsRecord, toProject } from "@/lib/server/mappers";
 import { validateProjectInput } from "@/lib/server/validation";
 import type { ProjectFormInput } from "@/lib/types";
@@ -26,8 +27,7 @@ const projectInclude = {
   },
   coolifyLink: {
     include: {
-      coolifyProject: true,
-      coolifyApplication: true
+      coolifyProject: true
     }
   }
 } as const;
@@ -53,8 +53,11 @@ function normalizeProjectInput(body: Partial<ProjectFormInput>): ProjectFormInpu
 
 export async function GET(request: Request, context: RouteContext) {
   try {
-    await requireCurrentUser(request);
+    const user = await requireCurrentUser(request);
     const { id } = await context.params;
+
+    await repairProjectCoolifyLinkCreatedByMiniHost(id).catch(() => undefined);
+    await backfillProjectCoolifyLink(id, user.id).catch(() => undefined);
 
     const project = await prisma.project.findUnique({
       where: { id },
@@ -73,10 +76,12 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const { records, ...projectData } = project;
+    const inconsistencies = await detectProjectCoolifyInconsistencies(id);
 
     return ok({
       project: toProject(projectData),
-      records: records.map(toDnsRecord)
+      records: records.map(toDnsRecord),
+      coolifyInconsistencies: inconsistencies
     });
   } catch (error) {
     return handleRouteError(error);

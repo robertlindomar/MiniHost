@@ -61,7 +61,6 @@ type ProjectWithCount = PrismaProject & {
 
 type ProjectCoolifyLinkWithResources = PrismaProjectCoolifyLink & {
   coolifyProject?: PrismaCoolifyProject | null;
-  coolifyApplication?: PrismaCoolifyApplication | null;
 };
 
 type AuditLogWithUser = AuditLog & {
@@ -311,7 +310,8 @@ export function toProjectCoolifyLink(link: ProjectCoolifyLinkWithResources) {
     id: link.id,
     projectId: link.projectId,
     coolifyProject: link.coolifyProject ? toCoolifyProject(link.coolifyProject) : undefined,
-    coolifyApplication: link.coolifyApplication ? toCoolifyApplication(link.coolifyApplication) : undefined,
+    source: link.source ?? undefined,
+    createdByMiniHost: link.createdByMiniHost,
     createdAt: link.createdAt.toISOString(),
     updatedAt: link.updatedAt.toISOString()
   };

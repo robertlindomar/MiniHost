@@ -4,6 +4,11 @@ import {
   provisionCoolifyApplication
 } from "@/lib/server/coolify-application-provisioner";
 import { hasCoolifyCredential, CoolifyCredentialError } from "@/lib/server/coolify-credential";
+import {
+  assertApplicationUsesProjectCoolifyProject,
+  getProjectCoolifyProject,
+  ProjectCoolifyProjectError
+} from "@/lib/server/project-coolify-project";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { toProjectApplication } from "@/lib/server/mappers";
@@ -41,14 +46,6 @@ export async function POST(request: Request) {
       return fail("Selecione o servidor Coolify.", 400);
     }
 
-    if (!coolifyProjectId) {
-      return fail("Selecione o projeto Coolify.", 400);
-    }
-
-    if (!(await hasCoolifyCredential())) {
-      return fail("Configure a credencial do Coolify em Configurações.", 400);
-    }
-
     const application = await prisma.projectApplication.findUnique({
       where: { id: projectApplicationId },
       include: {
@@ -63,6 +60,29 @@ export async function POST(request: Request) {
       return fail("Aplicação planejada não encontrada.", 404);
     }
 
+    const linkedCoolifyProject = await getProjectCoolifyProject(application.projectId);
+    const resolvedCoolifyProjectId = coolifyProjectId || linkedCoolifyProject?.id || "";
+
+    if (!resolvedCoolifyProjectId) {
+      return fail("Crie ou vincule um projeto Coolify ao projeto MiniHost antes de provisionar aplicações.", 400);
+    }
+
+    if (coolifyProjectId && linkedCoolifyProject && coolifyProjectId !== linkedCoolifyProject.id) {
+      try {
+        await assertApplicationUsesProjectCoolifyProject(application.projectId, coolifyProjectId);
+      } catch (error) {
+        if (error instanceof ProjectCoolifyProjectError) {
+          return fail(error.message, 400);
+        }
+
+        throw error;
+      }
+    }
+
+    if (!(await hasCoolifyCredential())) {
+      return fail("Configure a credencial do Coolify em Configurações.", 400);
+    }
+
     const expectedConfirmation = buildApplicationProvisionConfirmationText(application.slug);
 
     if (confirmationText !== expectedConfirmation) {
@@ -71,7 +91,7 @@ export async function POST(request: Request) {
 
     const [coolifyServer, coolifyProject] = await Promise.all([
       prisma.coolifyServer.findUnique({ where: { id: coolifyServerId } }),
-      prisma.coolifyProject.findUnique({ where: { id: coolifyProjectId } })
+      prisma.coolifyProject.findUnique({ where: { id: resolvedCoolifyProjectId } })
     ]);
 
     const eligibility = canCreateInCoolify({
@@ -81,7 +101,7 @@ export async function POST(request: Request) {
       gitBranch: application.gitBranch,
       coolifyApplicationId: application.coolifyApplicationId,
       coolifyServerId,
-      coolifyProjectId,
+      coolifyProjectId: resolvedCoolifyProjectId,
       hasCoolifyCredential: true,
       hasActiveServer: coolifyServer?.status === "ACTIVE",
       hasActiveProject: coolifyProject?.status === "ACTIVE"
@@ -102,7 +122,7 @@ export async function POST(request: Request) {
     const result = await provisionCoolifyApplication({
       projectApplicationId: application.id,
       coolifyServerId,
-      coolifyProjectId,
+      coolifyProjectId: resolvedCoolifyProjectId,
       userId: user.id,
       applyEnvsAfterCreate: Boolean(body.applyEnvsAfterCreate),
       deployAfterCreate: Boolean(body.deployAfterCreate)

@@ -721,7 +721,7 @@ export function PublishPage() {
           </div>
         </WizardCard>
 
-        <WizardCard title="D) Coolify" subtitle="Onde a aplicação será criada e publicada">
+        <WizardCard title="D) Coolify" subtitle="O projeto Coolify será o container das aplicações deste projeto MiniHost">
           <div className="space-y-4">
             <label className="flex items-center gap-2 text-sm text-zinc-700">
               <input type="checkbox" checked={createInCoolify} onChange={(event) => setCreateInCoolify(event.target.checked)} />

@@ -14,7 +14,8 @@ import {
 } from "@/lib/terminate";
 import { writeAudit } from "@/lib/server/audit";
 import { syncCoolifyResources } from "@/lib/server/coolify-cache";
-import { isCoolifyResourceCreatedByMiniHost, resolveProjectCoolifyProjects } from "@/lib/server/coolify-resource";
+import { resolveProjectCoolifyProjectFromLink } from "@/lib/server/coolify-resource";
+import { repairProjectCoolifyLinkCreatedByMiniHost } from "@/lib/server/project-coolify-project";
 import { deleteProjectDnsRecord } from "@/lib/server/dns-record-delete";
 import { destroyProjectDatabase } from "@/lib/server/postgres-provisioner";
 import { DatabaseGuardError } from "@/lib/server/postgres-guard";
@@ -38,8 +39,7 @@ export class ProjectTerminatorError extends Error {
 const projectInclude = {
   coolifyLink: {
     include: {
-      coolifyProject: true,
-      coolifyApplication: true
+      coolifyProject: true
     }
   },
   records: {
@@ -122,6 +122,8 @@ export async function terminateProject(input: ProjectTerminateInput & { userId: 
   const steps = createInitialSteps();
   const pending: TerminationPendingItem[] = [];
   const options = input.options;
+
+  await repairProjectCoolifyLinkCreatedByMiniHost(input.projectId).catch(() => undefined);
 
   const project = await prisma.project.findUnique({
     where: { id: input.projectId },
@@ -407,7 +409,8 @@ export async function terminateProject(input: ProjectTerminateInput & { userId: 
     setStep(steps, "coolify_apps", "skipped", "Exclusão de aplicações Coolify não selecionada.");
   }
 
-  const coolifyProjects = resolveProjectCoolifyProjects(project);
+  const linkedCoolifyProject = resolveProjectCoolifyProjectFromLink(project);
+  const coolifyProjects = linkedCoolifyProject ? [linkedCoolifyProject] : [];
 
   if (options.deleteCoolifyProject && coolifyProjects.length > 0) {
     setStep(steps, "coolify_project", "running");
@@ -459,7 +462,8 @@ export async function terminateProject(input: ProjectTerminateInput & { userId: 
         assertCoolifyProjectDeletionAllowed({
           coolifyProject,
           deleteCoolifyProject: true,
-          confirmExternalRemoval: options.confirmExternalCoolifyRemoval
+          confirmExternalRemoval: options.confirmExternalCoolifyRemoval,
+          createdByMiniHost: coolifyProject.createdByMiniHost
         });
 
         await deleteCoolifyProject(coolifyProject.coolifyId);
@@ -706,8 +710,7 @@ export async function terminateProject(input: ProjectTerminateInput & { userId: 
       },
       coolifyLink: {
         include: {
-          coolifyProject: true,
-          coolifyApplication: true
+          coolifyProject: true
         }
       }
     }
@@ -739,6 +742,8 @@ export async function terminateProject(input: ProjectTerminateInput & { userId: 
 }
 
 export async function getProjectTerminatePreview(projectId: string) {
+  await repairProjectCoolifyLinkCreatedByMiniHost(projectId).catch(() => undefined);
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: projectInclude
@@ -748,7 +753,8 @@ export async function getProjectTerminatePreview(projectId: string) {
     throw new ProjectTerminatorError("Projeto não encontrado.");
   }
 
-  const coolifyProjects = resolveProjectCoolifyProjects(project);
+  const linkedCoolifyProject = resolveProjectCoolifyProjectFromLink(project);
+  const coolifyProjects = linkedCoolifyProject ? [linkedCoolifyProject] : [];
 
   return {
     project: {
@@ -762,7 +768,7 @@ export async function getProjectTerminatePreview(projectId: string) {
       archiveProject: true,
       deleteDnsRecords: true,
       deleteCoolifyApplications: true,
-      deleteCoolifyProject: coolifyProjects.some((item) => item.createdByMiniHost),
+      deleteCoolifyProject: linkedCoolifyProject?.createdByMiniHost ?? false,
       destroyDatabases: false
     } satisfies TerminateOptions,
     resources: {

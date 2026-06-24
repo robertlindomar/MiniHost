@@ -223,7 +223,6 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
   const [generatedWarning, setGeneratedWarning] = useState<string | null>(null);
   const [coolifySelection, setCoolifySelection] = useState({
     serverId: "",
-    projectId: "",
     applicationId: ""
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -256,6 +255,7 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
     () => coolifyApplications.filter((application) => application.status === "ACTIVE"),
     [coolifyApplications]
   );
+  const linkedCoolifyProject = project.coolifyLink?.coolifyProject;
 
   async function reload() {
     try {
@@ -326,7 +326,6 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
       setSelectedApplication(data.application);
       setCoolifySelection({
         serverId: data.application.coolifyServer?.id ?? "",
-        projectId: data.application.coolifyProject?.id ?? "",
         applicationId: data.application.coolifyApplication?.id ?? ""
       });
       setGeneratedEnv(null);
@@ -487,7 +486,10 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
         `/api/projects/${project.id}/applications/${selectedApplication.id}/link-coolify`,
         {
           method: "POST",
-          body: JSON.stringify(coolifySelection)
+          body: JSON.stringify({
+            coolifyServerId: coolifySelection.serverId || null,
+            coolifyApplicationId: coolifySelection.applicationId
+          })
         }
       );
       setSelectedApplication(data.application);
@@ -696,10 +698,11 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
         gitBranch: selectedApplication.gitBranch,
         coolifyApplicationId: selectedApplication.coolifyApplication?.id,
         coolifyServerId: selectedApplication.coolifyServer?.id ?? coolifySelection.serverId,
-        coolifyProjectId: selectedApplication.coolifyProject?.id ?? coolifySelection.projectId,
+        coolifyProjectId: linkedCoolifyProject?.id,
         hasCoolifyCredential,
         hasActiveServer: activeCoolifyServers.length > 0,
-        hasActiveProject: activeCoolifyProjects.length > 0
+        hasActiveProject: linkedCoolifyProject?.status === "ACTIVE",
+        hasProjectCoolifyLink: Boolean(linkedCoolifyProject)
       })
     : { allowed: false, reasons: [] };
   const applyEnvsEligibility = selectedApplication
@@ -1072,7 +1075,7 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
                 <div>
                   <h4 className="font-semibold text-zinc-950">Coolify</h4>
                   <p className="mt-1 text-sm text-zinc-500">
-                    Crie uma aplicação real no Coolify ou vincule com uma aplicação já sincronizada.
+                    Crie uma aplicação real no Coolify ou vincule com uma aplicação já sincronizada. O projeto Coolify é herdado do projeto MiniHost.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1103,6 +1106,18 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
                   </button>
                 </div>
               </div>
+              {!linkedCoolifyProject ? (
+                <div className="mt-4">
+                  <Notice
+                    type="info"
+                    message="Crie ou vincule um projeto Coolify na seção do projeto antes de provisionar ou vincular aplicações."
+                  />
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-zinc-600">
+                  Projeto Coolify herdado: <span className="font-semibold text-zinc-900">{linkedCoolifyProject.name}</span>
+                </p>
+              )}
               {selectedApplication.coolifyApplication ? (
                 <div className="mt-4 space-y-4">
                   <CoolifyProvisionChecklist application={selectedApplication} />
@@ -1161,20 +1176,16 @@ export function ProjectApplicationsSection({ project, linkedRecords, domains, on
                   />
                 </div>
               ) : null}
-              <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
+              <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
                 <select value={coolifySelection.serverId} onChange={(event) => setCoolifySelection((current) => ({ ...current, serverId: event.target.value }))} className={fieldClass}>
                   <option value="">Servidor opcional</option>
                   {activeCoolifyServers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
-                </select>
-                <select value={coolifySelection.projectId} onChange={(event) => setCoolifySelection((current) => ({ ...current, projectId: event.target.value }))} className={fieldClass}>
-                  <option value="">Projeto opcional</option>
-                  {activeCoolifyProjects.map((coolifyProject) => <option key={coolifyProject.id} value={coolifyProject.id}>{coolifyProject.name}</option>)}
                 </select>
                 <select value={coolifySelection.applicationId} onChange={(event) => setCoolifySelection((current) => ({ ...current, applicationId: event.target.value }))} className={fieldClass}>
                   <option value="">Aplicação Coolify</option>
                   {activeCoolifyApplications.map((application) => <option key={application.id} value={application.id}>{application.name}</option>)}
                 </select>
-                <button type="button" onClick={() => void handleLinkCoolify()} disabled={isSubmitting || !coolifySelection.applicationId} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">
+                <button type="button" onClick={() => void handleLinkCoolify()} disabled={isSubmitting || !coolifySelection.applicationId || !linkedCoolifyProject} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">
                   <Link2 className="h-4 w-4" />
                   Vincular existente
                 </button>

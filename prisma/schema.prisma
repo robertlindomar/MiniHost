@@ -299,7 +299,6 @@ model CoolifyApplication {
   lastSyncedAt     DateTime?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
-  links            ProjectCoolifyLink[]
   applicationPlans ProjectApplication[]
 
   @@index([name])
@@ -308,18 +307,17 @@ model CoolifyApplication {
 }
 
 model ProjectCoolifyLink {
-  id                        String              @id @default(cuid())
-  projectId                 String              @unique
-  coolifyProjectCacheId     String?
-  coolifyApplicationCacheId String?
-  createdAt                 DateTime            @default(now())
-  updatedAt                 DateTime            @updatedAt
-  project                   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  coolifyProject            CoolifyProject?     @relation(fields: [coolifyProjectCacheId], references: [id], onDelete: SetNull)
-  coolifyApplication        CoolifyApplication? @relation(fields: [coolifyApplicationCacheId], references: [id], onDelete: SetNull)
+  id                    String          @id @default(cuid())
+  projectId             String          @unique
+  coolifyProjectCacheId String?
+  source                String?
+  createdByMiniHost     Boolean         @default(false)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  project               Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  coolifyProject        CoolifyProject? @relation(fields: [coolifyProjectCacheId], references: [id], onDelete: SetNull)
 
   @@index([coolifyProjectCacheId])
-  @@index([coolifyApplicationCacheId])
   @@map("project_coolify_links")
 }
 

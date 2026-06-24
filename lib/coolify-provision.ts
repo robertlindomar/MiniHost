@@ -185,6 +185,7 @@ export type CanCreateInCoolifyInput = {
   hasCoolifyCredential: boolean;
   hasActiveServer: boolean;
   hasActiveProject: boolean;
+  hasProjectCoolifyLink?: boolean;
   requireSelectedDestination?: boolean;
 };
 
@@ -193,6 +194,10 @@ function collectCreateBlockers(input: CanCreateInCoolifyInput) {
 
   if (!input.hasCoolifyCredential) {
     reasons.push("Configure a credencial do Coolify em Configurações.");
+  }
+
+  if (input.hasProjectCoolifyLink === false) {
+    reasons.push("Crie ou vincule um projeto Coolify ao projeto MiniHost antes de provisionar aplicações.");
   }
 
   if (input.coolifyApplicationId) {

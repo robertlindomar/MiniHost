@@ -49,22 +49,11 @@ async function countBrokenProjectLinks() {
       status: { not: "ARCHIVED" },
       coolifyLink: {
         is: {
-          OR: [
-            {
-              coolifyProject: {
-                is: {
-                  status: { in: ["MISSING", "REMOVED"] }
-                }
-              }
-            },
-            {
-              coolifyApplication: {
-                is: {
-                  status: { in: ["MISSING", "REMOVED"] }
-                }
-              }
+          coolifyProject: {
+            is: {
+              status: { in: ["MISSING", "REMOVED"] }
             }
-          ]
+          }
         }
       }
     }
