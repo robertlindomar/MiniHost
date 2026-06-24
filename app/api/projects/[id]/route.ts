@@ -20,6 +20,12 @@ const projectInclude = {
         where: { status: { not: "ARCHIVED" } }
       }
     }
+  },
+  coolifyLink: {
+    include: {
+      coolifyProject: true,
+      coolifyApplication: true
+    }
   }
 } as const;
 

@@ -1,12 +1,19 @@
 import type {
   AppSetting,
   AuditLog,
+  CoolifyApplication as PrismaCoolifyApplication,
+  CoolifyProject as PrismaCoolifyProject,
+  CoolifyServer as PrismaCoolifyServer,
   DnsRecord as PrismaDnsRecord,
   Domain as PrismaDomain,
   Project as PrismaProject,
+  ProjectCoolifyLink as PrismaProjectCoolifyLink,
   ProjectDatabase as PrismaProjectDatabase
 } from "@prisma/client";
 import type {
+  CoolifyApplicationCache,
+  CoolifyProjectCache,
+  CoolifyServerCache,
   DnsRecord,
   DnsRecordStatus,
   Domain,
@@ -30,6 +37,12 @@ type ProjectWithCount = PrismaProject & {
     records: number;
     databases?: number;
   };
+  coolifyLink?: ProjectCoolifyLinkWithResources | null;
+};
+
+type ProjectCoolifyLinkWithResources = PrismaProjectCoolifyLink & {
+  coolifyProject?: PrismaCoolifyProject | null;
+  coolifyApplication?: PrismaCoolifyApplication | null;
 };
 
 type AuditLogWithUser = AuditLog & {
@@ -70,7 +83,60 @@ export function toProject(project: ProjectWithCount): Project {
     updatedAt: project.updatedAt.toISOString(),
     archivedAt: project.archivedAt?.toISOString(),
     recordCount: project._count?.records,
-    databaseCount: project._count?.databases
+    databaseCount: project._count?.databases,
+    coolifyLink: project.coolifyLink ? toProjectCoolifyLink(project.coolifyLink) : undefined
+  };
+}
+
+export function toCoolifyServer(server: PrismaCoolifyServer): CoolifyServerCache {
+  return {
+    id: server.id,
+    coolifyId: server.coolifyId,
+    name: server.name,
+    description: server.description ?? undefined,
+    status: server.status ?? undefined,
+    ip: server.ip ?? undefined,
+    lastSyncedAt: server.lastSyncedAt?.toISOString(),
+    createdAt: server.createdAt.toISOString(),
+    updatedAt: server.updatedAt.toISOString()
+  };
+}
+
+export function toCoolifyProject(project: PrismaCoolifyProject): CoolifyProjectCache {
+  return {
+    id: project.id,
+    coolifyId: project.coolifyId,
+    name: project.name,
+    description: project.description ?? undefined,
+    lastSyncedAt: project.lastSyncedAt?.toISOString(),
+    createdAt: project.createdAt.toISOString(),
+    updatedAt: project.updatedAt.toISOString()
+  };
+}
+
+export function toCoolifyApplication(application: PrismaCoolifyApplication): CoolifyApplicationCache {
+  return {
+    id: application.id,
+    coolifyId: application.coolifyId,
+    name: application.name,
+    fqdn: application.fqdn ?? undefined,
+    status: application.status ?? undefined,
+    gitRepository: application.gitRepository ?? undefined,
+    branch: application.branch ?? undefined,
+    lastSyncedAt: application.lastSyncedAt?.toISOString(),
+    createdAt: application.createdAt.toISOString(),
+    updatedAt: application.updatedAt.toISOString()
+  };
+}
+
+export function toProjectCoolifyLink(link: ProjectCoolifyLinkWithResources) {
+  return {
+    id: link.id,
+    projectId: link.projectId,
+    coolifyProject: link.coolifyProject ? toCoolifyProject(link.coolifyProject) : undefined,
+    coolifyApplication: link.coolifyApplication ? toCoolifyApplication(link.coolifyApplication) : undefined,
+    createdAt: link.createdAt.toISOString(),
+    updatedAt: link.updatedAt.toISOString()
   };
 }
 
@@ -168,7 +234,8 @@ export function toHistoryItem(item: AuditLogWithUser): HistoryItem {
       item.entityType === "record" ||
       item.entityType === "settings" ||
       item.entityType === "project" ||
-      item.entityType === "project_database"
+      item.entityType === "project_database" ||
+      item.entityType === "coolify"
         ? item.entityType
         : "settings",
     entityId: item.entityId ?? undefined,

@@ -5,6 +5,7 @@ import {
   Layers3,
   LayoutDashboard,
   ListTree,
+  Rocket,
   Settings,
   type LucideIcon
 } from "lucide-react";
@@ -21,6 +22,7 @@ export const navigation: NavigationItem[] = [
   { href: "/projects", label: "Projetos", icon: FolderKanban },
   { href: "/records", label: "Registros DNS", icon: ListTree },
   { href: "/templates", label: "Templates DNS", icon: Layers3 },
+  { href: "/coolify", label: "Coolify", icon: Rocket },
   { href: "/history", label: "Histórico", icon: History },
   { href: "/settings", label: "Configurações", icon: Settings }
 ];
@@ -50,6 +52,10 @@ export const pageMetaByHref: Record<string, PageMeta> = {
   "/templates": {
     title: "Templates DNS",
     description: "Crie registros comuns rapidamente usando modelos prontos."
+  },
+  "/coolify": {
+    title: "Coolify",
+    description: "Sincronize e visualize recursos do Coolify em modo somente leitura."
   },
   "/history": {
     title: "Histórico",

@@ -91,6 +91,7 @@ export function AuditLogFilters({ filters, history, disabled = false, onChange, 
                 <option value="project">Projeto</option>
                 <option value="project_database">Banco PostgreSQL</option>
                 <option value="cloudflare">Cloudflare</option>
+                <option value="coolify">Coolify</option>
                 <option value="template">Template DNS</option>
                 <option value="settings">Configuração</option>
                 <option value="system">Usuário/Sistema</option>

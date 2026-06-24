@@ -1,6 +1,6 @@
 "use client";
 
-import { Cloud, Database, Globe2, Loader2, Server, ShieldCheck } from "lucide-react";
+import { Cloud, Database, Globe2, Loader2, Rocket, Server, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AlertBox } from "@/components/settings/AlertBox";
 import { FormField, settingsFieldClass, settingsFieldErrorClass } from "@/components/settings/FormField";
@@ -9,6 +9,7 @@ import { SecretInput } from "@/components/settings/SecretInput";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsLoadingState } from "@/components/settings/SettingsLoadingState";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { CoolifyStatusBadge } from "@/components/settings/CoolifyStatusBadge";
 import { PostgresAdminStatusBadge } from "@/components/settings/PostgresAdminStatusBadge";
 import { SettingsStatusBadge } from "@/components/settings/SettingsStatusBadge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -17,13 +18,14 @@ import { FieldInfoTooltip } from "@/components/ui/FieldInfoTooltip";
 import { pageContainerNarrowClass } from "@/components/layout/page-container";
 import { apiRequest } from "@/lib/api-client";
 import { MASKED_SECRET_VALUE, validateSettingsInput, type SettingsFieldErrors } from "@/lib/settings";
-import type { CloudflareStatus, Domain, MiniHostSettings, PostgresAdminStatus } from "@/lib/types";
+import type { CloudflareStatus, CoolifyStatus, Domain, MiniHostSettings, PostgresAdminStatus } from "@/lib/types";
 
 type ToastState = { type: "success" | "error" | "info"; message: string } | null;
 
 type SettingsResponse = {
   settings: MiniHostSettings;
   cloudflare: CloudflareStatus;
+  coolify?: CoolifyStatus;
   postgresAdmin?: PostgresAdminStatus;
 };
 
@@ -34,6 +36,11 @@ type TokenMutationResponse = SettingsResponse & {
 type PostgresCredentialMutationResponse = {
   message: string;
   postgresAdmin: PostgresAdminStatus;
+};
+
+type CoolifyCredentialMutationResponse = {
+  message: string;
+  coolify: CoolifyStatus;
 };
 
 type DomainsResponse = { domains: Domain[] };
@@ -60,12 +67,22 @@ const defaultPostgresAdminStatus: PostgresAdminStatus = {
   connectionStatus: "not_configured"
 };
 
+const defaultCoolifyStatus: CoolifyStatus = {
+  hasCredential: false,
+  connectionStatus: "not_configured"
+};
+
 export function SettingsPage() {
   const [settings, setSettings] = useState<MiniHostSettings>(defaultSettings);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [cloudflare, setCloudflare] = useState<CloudflareStatus>(defaultCloudflareStatus);
+  const [coolify, setCoolify] = useState<CoolifyStatus>(defaultCoolifyStatus);
   const [postgresAdmin, setPostgresAdmin] = useState<PostgresAdminStatus>(defaultPostgresAdminStatus);
   const [tokenDraft, setTokenDraft] = useState("");
+  const [coolifyDraft, setCoolifyDraft] = useState({
+    baseUrl: "",
+    token: ""
+  });
   const [postgresCredentialDraft, setPostgresCredentialDraft] = useState({
     host: "",
     port: 5432,
@@ -75,17 +92,22 @@ export function SettingsPage() {
     sslEnabled: false
   });
   const [isReplacingToken, setIsReplacingToken] = useState(false);
+  const [isReplacingCoolifyToken, setIsReplacingCoolifyToken] = useState(false);
   const [isReplacingPostgresPassword, setIsReplacingPostgresPassword] = useState(false);
   const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
+  const [isRemoveCoolifyDialogOpen, setIsRemoveCoolifyDialogOpen] = useState(false);
   const [isRemovePostgresDialogOpen, setIsRemovePostgresDialogOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<SettingsFieldErrors>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingToken, setIsSavingToken] = useState(false);
+  const [isSavingCoolifyCredential, setIsSavingCoolifyCredential] = useState(false);
   const [isSavingPostgresCredential, setIsSavingPostgresCredential] = useState(false);
   const [isRemovingToken, setIsRemovingToken] = useState(false);
+  const [isRemovingCoolifyCredential, setIsRemovingCoolifyCredential] = useState(false);
   const [isRemovingPostgresCredential, setIsRemovingPostgresCredential] = useState(false);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isTestingCoolifyConnection, setIsTestingCoolifyConnection] = useState(false);
   const [isTestingPostgresConnection, setIsTestingPostgresConnection] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [failedToLoad, setFailedToLoad] = useState(false);
@@ -102,7 +124,12 @@ export function SettingsPage() {
       setSettings(settingsData.settings);
       setDomains(domainsData.domains);
       setCloudflare(settingsData.cloudflare ?? defaultCloudflareStatus);
+      setCoolify(settingsData.coolify ?? defaultCoolifyStatus);
       setPostgresAdmin(settingsData.postgresAdmin ?? defaultPostgresAdminStatus);
+      setCoolifyDraft({
+        baseUrl: settingsData.coolify?.baseUrl ?? "",
+        token: ""
+      });
       setPostgresCredentialDraft({
         host: settingsData.postgresAdmin?.host ?? settingsData.settings.defaultPostgresHost ?? "",
         port: settingsData.postgresAdmin?.port ?? Number(settingsData.settings.defaultPostgresPort || 5432),
@@ -114,6 +141,7 @@ export function SettingsPage() {
       setIsReplacingPostgresPassword(false);
       setTokenDraft("");
       setIsReplacingToken(false);
+      setIsReplacingCoolifyToken(false);
       setFieldErrors({});
       setLoadError(null);
       setFailedToLoad(false);
@@ -147,8 +175,10 @@ export function SettingsPage() {
 
   const hasDomains = domains.length > 0;
   const hasStoredToken = cloudflare.hasToken;
+  const hasStoredCoolifyCredential = coolify.hasCredential;
   const hasStoredPostgresCredential = postgresAdmin.hasCredential;
   const showTokenInput = !hasStoredToken || isReplacingToken;
+  const showCoolifyTokenInput = !hasStoredCoolifyCredential || isReplacingCoolifyToken;
   const showPostgresPasswordInput = !hasStoredPostgresCredential || isReplacingPostgresPassword;
 
   function updateField<Key extends keyof MiniHostSettings>(key: Key, value: MiniHostSettings[Key]) {
@@ -181,6 +211,8 @@ export function SettingsPage() {
 
       setSettings(data.settings);
       setCloudflare(data.cloudflare ?? defaultCloudflareStatus);
+      setCoolify(data.coolify ?? defaultCoolifyStatus);
+      setPostgresAdmin(data.postgresAdmin ?? defaultPostgresAdminStatus);
       setToast({ type: "success", message: "Configurações salvas com sucesso." });
     } catch (requestError) {
       setToast({
@@ -280,6 +312,97 @@ export function SettingsPage() {
       setToast({ type: "error", message });
     } finally {
       setIsTestingConnection(false);
+    }
+  }
+
+  async function handleSaveCoolifyCredential() {
+    if (!coolifyDraft.baseUrl.trim()) {
+      setToast({ type: "error", message: "Informe a URL base do Coolify." });
+      return;
+    }
+
+    if (!hasStoredCoolifyCredential && !coolifyDraft.token.trim()) {
+      setToast({ type: "error", message: "Informe o token da API do Coolify." });
+      return;
+    }
+
+    if (isReplacingCoolifyToken && !coolifyDraft.token.trim()) {
+      setToast({ type: "error", message: "Informe o novo token da API do Coolify." });
+      return;
+    }
+
+    try {
+      setIsSavingCoolifyCredential(true);
+      const data = await apiRequest<CoolifyCredentialMutationResponse>("/api/settings/coolify", {
+        method: "POST",
+        body: JSON.stringify(coolifyDraft)
+      });
+
+      setCoolify(data.coolify);
+      setCoolifyDraft((current) => ({ ...current, token: "" }));
+      setIsReplacingCoolifyToken(false);
+      setToast({ type: "success", message: data.message });
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message:
+          requestError instanceof Error ? requestError.message : "Não foi possível salvar a configuração do Coolify."
+      });
+    } finally {
+      setIsSavingCoolifyCredential(false);
+    }
+  }
+
+  async function handleRemoveCoolifyCredential() {
+    try {
+      setIsRemovingCoolifyCredential(true);
+      const data = await apiRequest<CoolifyCredentialMutationResponse>("/api/settings/coolify", {
+        method: "DELETE"
+      });
+
+      setCoolify(data.coolify);
+      setCoolifyDraft({ baseUrl: "", token: "" });
+      setIsReplacingCoolifyToken(false);
+      setIsRemoveCoolifyDialogOpen(false);
+      setToast({ type: "success", message: data.message });
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message:
+          requestError instanceof Error ? requestError.message : "Não foi possível remover a configuração do Coolify."
+      });
+    } finally {
+      setIsRemovingCoolifyCredential(false);
+    }
+  }
+
+  async function handleTestCoolifyConnection() {
+    try {
+      setIsTestingCoolifyConnection(true);
+      const data = await apiRequest<TestConnectionResponse>("/api/settings/coolify/test", {
+        method: "POST"
+      });
+      setCoolify((current) => ({
+        ...current,
+        connectionStatus: "connected",
+        lastTestMessage: data.message,
+        lastTestedAt: new Date().toISOString()
+      }));
+      setToast({ type: "success", message: data.message });
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : "Não foi possível conectar ao Coolify. Verifique URL, token e permissões.";
+      setCoolify((current) => ({
+        ...current,
+        connectionStatus: "error",
+        lastTestMessage: message,
+        lastTestedAt: new Date().toISOString()
+      }));
+      setToast({ type: "error", message });
+    } finally {
+      setIsTestingCoolifyConnection(false);
     }
   }
 
@@ -512,6 +635,142 @@ export function SettingsPage() {
             {!settings.defaultZoneId.trim() ? (
               <AlertBox type="warning" message="Zone ID ausente. A sincronização com Cloudflare pode ficar indisponível." />
             ) : null}
+          </SettingsCard>
+
+          <SettingsCard
+            title="Coolify"
+            description="Integração em modo leitura para listar servidores, projetos e aplicações."
+            icon={<Rocket className="h-5 w-5 text-emerald-600" />}
+            badge={<CoolifyStatusBadge status={coolify.connectionStatus} />}
+          >
+            <FormField
+              id="coolify-base-url"
+              label="URL base do Coolify"
+              info="Informe a URL do painel Coolify, por exemplo https://coolify.exemplo.com."
+            >
+              <input
+                id="coolify-base-url"
+                value={coolifyDraft.baseUrl}
+                disabled={isSavingCoolifyCredential || isRemovingCoolifyCredential}
+                onChange={(event) =>
+                  setCoolifyDraft((current) => ({ ...current, baseUrl: event.target.value }))
+                }
+                className={settingsFieldClass}
+                placeholder="https://coolify.exemplo.com"
+              />
+            </FormField>
+
+            <FormField
+              id="coolify-token"
+              label="Coolify API Token"
+              info="Token salvo criptografado. Depois de salvo, não pode ser visualizado novamente."
+            >
+              {showCoolifyTokenInput ? (
+                <SecretInput
+                  id="coolify-token"
+                  value={coolifyDraft.token}
+                  onChange={(value) => setCoolifyDraft((current) => ({ ...current, token: value }))}
+                  disabled={isSavingCoolifyCredential || isRemovingCoolifyCredential}
+                  hasStoredValue={false}
+                  placeholder="Cole o token do Coolify"
+                />
+              ) : (
+                <input
+                  id="coolify-token"
+                  type="password"
+                  value={MASKED_SECRET_VALUE}
+                  readOnly
+                  disabled
+                  className={`${settingsFieldClass} bg-zinc-50 text-zinc-500`}
+                />
+              )}
+            </FormField>
+
+            {coolify.lastTestedAt ? (
+              <AlertBox
+                type={coolify.connectionStatus === "error" ? "warning" : "info"}
+                message={
+                  coolify.lastTestMessage
+                    ? `Último teste (${new Date(coolify.lastTestedAt).toLocaleString("pt-BR")}): ${coolify.lastTestMessage}`
+                    : `Último teste em ${new Date(coolify.lastTestedAt).toLocaleString("pt-BR")}.`
+                }
+              />
+            ) : null}
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <button
+                type="button"
+                onClick={() => void handleSaveCoolifyCredential()}
+                disabled={isSavingCoolifyCredential || isRemovingCoolifyCredential}
+                className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingCoolifyCredential ? "Salvando..." : "Salvar configuração"}
+              </button>
+
+              {hasStoredCoolifyCredential && !showCoolifyTokenInput ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReplacingCoolifyToken(true);
+                    setCoolifyDraft((current) => ({ ...current, token: "" }));
+                  }}
+                  disabled={isSavingCoolifyCredential || isRemovingCoolifyCredential}
+                  className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Trocar token
+                </button>
+              ) : null}
+
+              {hasStoredCoolifyCredential && showCoolifyTokenInput ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReplacingCoolifyToken(false);
+                    setCoolifyDraft((current) => ({ ...current, token: "" }));
+                  }}
+                  disabled={isSavingCoolifyCredential || isRemovingCoolifyCredential}
+                  className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancelar troca
+                </button>
+              ) : null}
+
+              {hasStoredCoolifyCredential ? (
+                <button
+                  type="button"
+                  onClick={() => setIsRemoveCoolifyDialogOpen(true)}
+                  disabled={isSavingCoolifyCredential || isRemovingCoolifyCredential}
+                  className="inline-flex items-center justify-center rounded-md border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Remover token
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => void handleTestCoolifyConnection()}
+                disabled={
+                  isSavingCoolifyCredential ||
+                  isRemovingCoolifyCredential ||
+                  isTestingCoolifyConnection ||
+                  !hasStoredCoolifyCredential ||
+                  isReplacingCoolifyToken
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isTestingCoolifyConnection ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Rocket className="h-4 w-4" />
+                )}
+                {isTestingCoolifyConnection ? "Testando conexão..." : "Testar conexão"}
+              </button>
+            </div>
+
+            <AlertBox
+              type="info"
+              message="Nesta etapa, o MiniHost apenas lê e sincroniza recursos do Coolify. Nenhum deploy, edição ou exclusão é executado."
+            />
           </SettingsCard>
 
           <SettingsCard
@@ -876,6 +1135,17 @@ export function SettingsPage() {
         onCancel={() => (isRemovingToken ? undefined : setIsRemoveDialogOpen(false))}
         onConfirm={() => void handleRemoveToken()}
         isConfirming={isRemovingToken}
+      />
+
+      <ConfirmDialog
+        isOpen={isRemoveCoolifyDialogOpen}
+        title="Remover token do Coolify"
+        message="Tem certeza que deseja remover a configuração do Coolify? A listagem e sincronização de recursos ficarão indisponíveis até cadastrar uma nova credencial."
+        confirmLabel="Remover token"
+        confirmingLabel="Removendo..."
+        onCancel={() => (isRemovingCoolifyCredential ? undefined : setIsRemoveCoolifyDialogOpen(false))}
+        onConfirm={() => void handleRemoveCoolifyCredential()}
+        isConfirming={isRemovingCoolifyCredential}
       />
 
       <ConfirmDialog

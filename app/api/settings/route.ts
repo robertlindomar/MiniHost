@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCurrentUser } from "@/lib/server/current-user";
 import { writeAudit } from "@/lib/server/audit";
 import { getCloudflareClientStatus } from "@/lib/server/cloudflare-credential";
+import { getCoolifyClientStatus } from "@/lib/server/coolify-credential";
 import { getPostgresAdminClientStatus } from "@/lib/server/postgres-admin-credential";
 import { fail, handleRouteError, ok, readBody } from "@/lib/server/http";
 import { defaultSettings, settingsEntries, toSettings } from "@/lib/server/mappers";
@@ -32,11 +33,13 @@ export async function GET(request: Request) {
     const rows = await prisma.appSetting.findMany();
     const settings = rows.length > 0 ? toSettings(rows) : defaultSettings;
     const cloudflare = await getCloudflareClientStatus();
+    const coolify = await getCoolifyClientStatus();
     const postgresAdmin = await getPostgresAdminClientStatus();
 
     return ok({
       settings: sanitizeSettingsForClient(settings),
       cloudflare,
+      coolify,
       cloudflareConfigured: cloudflare.hasToken,
       hasStoredCloudflareToken: cloudflare.hasToken,
       postgresAdmin
@@ -86,11 +89,13 @@ export async function PUT(request: Request) {
     });
 
     const cloudflare = await getCloudflareClientStatus();
+    const coolify = await getCoolifyClientStatus();
     const postgresAdmin = await getPostgresAdminClientStatus();
 
     return ok({
       settings: sanitizeSettingsForClient(next),
       cloudflare,
+      coolify,
       cloudflareConfigured: cloudflare.hasToken,
       hasStoredCloudflareToken: cloudflare.hasToken,
       postgresAdmin

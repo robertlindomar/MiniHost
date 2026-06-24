@@ -6,7 +6,16 @@ import { toDnsRecord, toDomain, toHistoryItem, toProject, toProjectDatabase } fr
 export async function GET(request: Request) {
   try {
     await requireCurrentUser(request);
-    const [domains, records, projects, databases, history] = await Promise.all([
+    const [
+      domains,
+      records,
+      projects,
+      databases,
+      history,
+      coolifyApplicationsCount,
+      linkedCoolifyProjectsCount,
+      unlinkedCoolifyProjectsCount
+    ] = await Promise.all([
       prisma.domain.findMany({ orderBy: { createdAt: "desc" } }),
       prisma.dnsRecord.findMany({
         where: { status: { not: "DELETED" } },
@@ -36,7 +45,20 @@ export async function GET(request: Request) {
         }
       }),
       prisma.projectDatabase.findMany({ orderBy: { createdAt: "desc" } }),
-      prisma.auditLog.findMany({ include: { user: true }, orderBy: { createdAt: "desc" }, take: 20 })
+      prisma.auditLog.findMany({ include: { user: true }, orderBy: { createdAt: "desc" }, take: 20 }),
+      prisma.coolifyApplication.count(),
+      prisma.project.count({
+        where: {
+          status: { not: "ARCHIVED" },
+          coolifyLink: { isNot: null }
+        }
+      }),
+      prisma.project.count({
+        where: {
+          status: { not: "ARCHIVED" },
+          coolifyLink: { is: null }
+        }
+      })
     ]);
 
     return ok({
@@ -44,7 +66,12 @@ export async function GET(request: Request) {
       records: records.map(toDnsRecord),
       projects: projects.map(toProject),
       databases: databases.map(toProjectDatabase),
-      history: history.map(toHistoryItem)
+      history: history.map(toHistoryItem),
+      coolifySummary: {
+        applications: coolifyApplicationsCount,
+        linkedProjects: linkedCoolifyProjectsCount,
+        unlinkedProjects: unlinkedCoolifyProjectsCount
+      }
     });
   } catch (error) {
     return handleRouteError(error);

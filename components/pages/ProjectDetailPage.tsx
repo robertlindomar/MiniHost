@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Link2, Unlink } from "lucide-react";
+import { ArrowLeft, Link2, Rocket, Unlink } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -13,17 +13,22 @@ import { OriginBadge } from "@/components/records/OriginBadge";
 import { ProxyBadge } from "@/components/records/ProxyBadge";
 import { RecordStatusBadge } from "@/components/records/RecordStatusBadge";
 import { DomainsLoadingState } from "@/components/domains/DomainsLoadingState";
+import { Badge } from "@/components/ui/Badge";
 import { Notice } from "@/components/ui/Notice";
 import { Toast } from "@/components/ui/Toast";
 import { pageContainerClass } from "@/components/layout/page-container";
 import { apiRequest } from "@/lib/api-client";
 import { formatDateTime, formatRecordValue } from "@/lib/format";
-import type { DnsRecord, Domain, Project } from "@/lib/types";
+import type { CoolifyApplicationCache, CoolifyProjectCache, DnsRecord, Domain, Project } from "@/lib/types";
 
 type ToastState = { type: "success" | "error" | "info"; message: string } | null;
 type ProjectDetailResponse = { project: Project; records: DnsRecord[] };
 type DomainsResponse = { domains: Domain[] };
 type RecordsResponse = { records: DnsRecord[] };
+type CoolifyResponse = {
+  projects: CoolifyProjectCache[];
+  applications: CoolifyApplicationCache[];
+};
 
 function getDomainName(domains: Domain[], domainId: string) {
   return domains.find((domain) => domain.id === domainId)?.name ?? "Domínio removido";
@@ -51,8 +56,15 @@ export function ProjectDetailPage() {
   const [linkedRecords, setLinkedRecords] = useState<DnsRecord[]>([]);
   const [allRecords, setAllRecords] = useState<DnsRecord[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
+  const [coolifyProjects, setCoolifyProjects] = useState<CoolifyProjectCache[]>([]);
+  const [coolifyApplications, setCoolifyApplications] = useState<CoolifyApplicationCache[]>([]);
+  const [coolifySelection, setCoolifySelection] = useState({
+    projectId: "",
+    applicationId: ""
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingCoolifyLink, setIsSavingCoolifyLink] = useState(false);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,16 +72,23 @@ export function ProjectDetailPage() {
   async function reload() {
     try {
       setIsLoading(true);
-      const [projectData, domainData, recordData] = await Promise.all([
+      const [projectData, domainData, recordData, coolifyData] = await Promise.all([
         apiRequest<ProjectDetailResponse>(`/api/projects/${projectId}`),
         apiRequest<DomainsResponse>("/api/domains"),
-        apiRequest<RecordsResponse>("/api/records")
+        apiRequest<RecordsResponse>("/api/records"),
+        apiRequest<CoolifyResponse>("/api/coolify")
       ]);
 
       setProject(projectData.project);
       setLinkedRecords(projectData.records);
       setDomains(domainData.domains);
       setAllRecords(recordData.records);
+      setCoolifyProjects(coolifyData.projects);
+      setCoolifyApplications(coolifyData.applications);
+      setCoolifySelection({
+        projectId: projectData.project.coolifyLink?.coolifyProject?.id ?? "",
+        applicationId: projectData.project.coolifyLink?.coolifyApplication?.id ?? ""
+      });
       setError(null);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar o projeto.");
@@ -134,6 +153,51 @@ export function ProjectDetailPage() {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleSaveCoolifyLink() {
+    if (!coolifySelection.projectId && !coolifySelection.applicationId) {
+      setToast({ type: "error", message: "Selecione um projeto ou aplicação do Coolify." });
+      return;
+    }
+
+    try {
+      setIsSavingCoolifyLink(true);
+      await apiRequest(`/api/projects/${projectId}/coolify-link`, {
+        method: "POST",
+        body: JSON.stringify({
+          coolifyProjectId: coolifySelection.projectId || null,
+          coolifyApplicationId: coolifySelection.applicationId || null
+        })
+      });
+      setToast({ type: "success", message: "Vínculo com Coolify salvo com sucesso." });
+      await reload();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível salvar o vínculo Coolify."
+      });
+    } finally {
+      setIsSavingCoolifyLink(false);
+    }
+  }
+
+  async function handleRemoveCoolifyLink() {
+    try {
+      setIsSavingCoolifyLink(true);
+      await apiRequest(`/api/projects/${projectId}/coolify-link`, {
+        method: "DELETE"
+      });
+      setToast({ type: "success", message: "Vínculo com Coolify removido." });
+      await reload();
+    } catch (requestError) {
+      setToast({
+        type: "error",
+        message: requestError instanceof Error ? requestError.message : "Não foi possível remover o vínculo Coolify."
+      });
+    } finally {
+      setIsSavingCoolifyLink(false);
     }
   }
 
@@ -204,6 +268,122 @@ export function ProjectDetailPage() {
             {project.archivedAt ? formatDateTime(project.archivedAt) : "—"}
           </p>
         </div>
+      </section>
+
+      <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-soft">
+        <div className="flex flex-col gap-3 border-b border-zinc-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+              <Rocket className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-zinc-950">Coolify</h3>
+              <p className="mt-1 text-sm text-zinc-500">
+                Vincule este projeto a recursos sincronizados do Coolify em modo somente leitura.
+              </p>
+            </div>
+          </div>
+          {project.coolifyLink ? <Badge variant="success">Vinculado</Badge> : <Badge variant="muted">Sem vínculo</Badge>}
+        </div>
+
+        {coolifyProjects.length === 0 && coolifyApplications.length === 0 ? (
+          <Notice
+            type="info"
+            message="Nenhum recurso Coolify sincronizado. Use a página Coolify para sincronizar antes de vincular."
+          />
+        ) : null}
+
+        {project.coolifyLink ? (
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-normal text-zinc-500">Projeto Coolify</p>
+              <p className="mt-2 font-semibold text-zinc-950">
+                {project.coolifyLink.coolifyProject?.name ?? "Não vinculado"}
+              </p>
+              {project.coolifyLink.coolifyProject?.description ? (
+                <p className="mt-1 text-sm text-zinc-600">{project.coolifyLink.coolifyProject.description}</p>
+              ) : null}
+            </div>
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-normal text-zinc-500">Aplicação Coolify</p>
+              <p className="mt-2 font-semibold text-zinc-950">
+                {project.coolifyLink.coolifyApplication?.name ?? "Não vinculada"}
+              </p>
+              {project.coolifyLink.coolifyApplication ? (
+                <div className="mt-2 space-y-1 text-sm text-zinc-600">
+                  <p>FQDN: {project.coolifyLink.coolifyApplication.fqdn || "-"}</p>
+                  <p>Status: {project.coolifyLink.coolifyApplication.status || "-"}</p>
+                  <p>Repo: {project.coolifyLink.coolifyApplication.gitRepository || "-"}</p>
+                  <p>Branch: {project.coolifyLink.coolifyApplication.branch || "-"}</p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {!isArchived ? (
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-zinc-700">Projeto Coolify</span>
+              <select
+                value={coolifySelection.projectId}
+                disabled={isSavingCoolifyLink}
+                onChange={(event) =>
+                  setCoolifySelection((current) => ({ ...current, projectId: event.target.value }))
+                }
+                className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-zinc-50"
+              >
+                <option value="">Sem projeto vinculado</option>
+                {coolifyProjects.map((coolifyProject) => (
+                  <option key={coolifyProject.id} value={coolifyProject.id}>
+                    {coolifyProject.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-zinc-700">Aplicação Coolify</span>
+              <select
+                value={coolifySelection.applicationId}
+                disabled={isSavingCoolifyLink}
+                onChange={(event) =>
+                  setCoolifySelection((current) => ({ ...current, applicationId: event.target.value }))
+                }
+                className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-zinc-50"
+              >
+                <option value="">Sem aplicação vinculada</option>
+                {coolifyApplications.map((application) => (
+                  <option key={application.id} value={application.id}>
+                    {application.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+              <button
+                type="button"
+                onClick={() => void handleSaveCoolifyLink()}
+                disabled={isSavingCoolifyLink}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <Link2 className="h-4 w-4" />
+                {isSavingCoolifyLink ? "Salvando..." : "Salvar vínculo"}
+              </button>
+              {project.coolifyLink ? (
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveCoolifyLink()}
+                  disabled={isSavingCoolifyLink}
+                  className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Remover vínculo
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <ProjectDatabasesSection project={project} onChanged={() => void reload()} />

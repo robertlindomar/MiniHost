@@ -31,6 +31,7 @@ export interface Project {
   archivedAt?: string;
   recordCount?: number;
   databaseCount?: number;
+  coolifyLink?: ProjectCoolifyLink;
 }
 
 export interface ProjectDatabase {
@@ -118,7 +119,7 @@ export interface DnsRecord {
 export interface HistoryItem {
   id: string;
   action: string;
-  entityType: "domain" | "record" | "settings" | "project" | "project_database";
+  entityType: "domain" | "record" | "settings" | "project" | "project_database" | "coolify";
   entityId?: string;
   entityName: string;
   userId?: string;
@@ -173,6 +174,66 @@ export interface PostgresAdminCredentialFormInput {
   username: string;
   password?: string;
   sslEnabled: boolean;
+}
+
+export type CoolifyConnectionStatus = "connected" | "not_configured" | "error" | "not_tested";
+
+export interface CoolifyStatus {
+  hasCredential: boolean;
+  connectionStatus: CoolifyConnectionStatus;
+  credentialStatus?: "ACTIVE" | "INVALID" | "DISABLED";
+  baseUrl?: string;
+  lastTestedAt?: string;
+  lastTestMessage?: string;
+}
+
+export interface CoolifyCredentialFormInput {
+  baseUrl: string;
+  token?: string;
+}
+
+export interface CoolifyServerCache {
+  id: string;
+  coolifyId: string;
+  name: string;
+  description?: string;
+  status?: string;
+  ip?: string;
+  lastSyncedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CoolifyProjectCache {
+  id: string;
+  coolifyId: string;
+  name: string;
+  description?: string;
+  lastSyncedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CoolifyApplicationCache {
+  id: string;
+  coolifyId: string;
+  name: string;
+  fqdn?: string;
+  status?: string;
+  gitRepository?: string;
+  branch?: string;
+  lastSyncedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectCoolifyLink {
+  id: string;
+  projectId: string;
+  coolifyProject?: CoolifyProjectCache;
+  coolifyApplication?: CoolifyApplicationCache;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProjectDatabasePermissionDetail {

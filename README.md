@@ -1,8 +1,61 @@
 # MiniHost
 
-MiniHost é um painel web para organizar domínios, registros DNS, projetos e bancos PostgreSQL da sua VPS.
+MiniHost é um painel web para organizar domínios, registros DNS, projetos, bancos PostgreSQL e recursos Coolify da sua VPS.
 
-Hoje o painel integra com PostgreSQL (metadados e provisionamento real) e Cloudflare (sincronização e CRUD de DNS). O objetivo futuro é evoluir para deploy automatizado com Coolify.
+Hoje o painel integra com PostgreSQL (metadados e provisionamento real), Cloudflare (sincronização e CRUD de DNS) e Coolify em modo somente leitura. O objetivo futuro é evoluir para deploy automatizado com Coolify.
+
+## Etapa 12 implementada
+
+- Model `CoolifyCredential` no Prisma com URL base, token criptografado, status e último teste.
+- Models de cache `CoolifyServer`, `CoolifyProject` e `CoolifyApplication`.
+- Model `ProjectCoolifyLink` para vincular um projeto MiniHost a um projeto/aplicação Coolify sincronizado.
+- Serviço backend `lib/coolify.ts` para listar servidores, projetos e aplicações via API do Coolify.
+- Rotas protegidas:
+  - `POST /api/settings/coolify` para salvar URL/token.
+  - `DELETE /api/settings/coolify` para remover a credencial.
+  - `POST /api/settings/coolify/test` para testar conexão.
+  - `GET /api/coolify` para listar cache local.
+  - `POST /api/coolify/sync` para sincronizar recursos.
+  - `POST /api/projects/[id]/coolify-link` e `DELETE .../coolify-link` para vincular/desvincular projeto.
+- Nova página **Coolify** no menu lateral com status de conexão, servidores, projetos, aplicações e botão **Sincronizar recursos**.
+- Seção **Coolify** em Configurações para URL base, token, último teste e ações de salvar/trocar/remover/testar.
+- Seção **Coolify** nos detalhes do projeto para vincular recursos sincronizados.
+- Dashboard com cards de aplicações Coolify sincronizadas, projetos vinculados e projetos sem vínculo.
+- Histórico/AuditLog com ações `COOLIFY_CREDENTIAL_SAVED`, `COOLIFY_CREDENTIAL_REMOVED`, `COOLIFY_TEST_SUCCESS`, `COOLIFY_TEST_FAILED`, `COOLIFY_SYNC_START`, `COOLIFY_SYNC_SUCCESS`, `COOLIFY_SYNC_FAILED`, `PROJECT_COOLIFY_LINK_CREATED` e `PROJECT_COOLIFY_LINK_REMOVED`.
+
+**Importante:** esta etapa é **somente leitura** no Coolify. O MiniHost não cria aplicações, não altera configurações, não executa deploys, não reinicia serviços e não exclui recursos do Coolify.
+
+### Configurar Coolify
+
+1. No Coolify, crie um API Token com permissão suficiente para listar recursos.
+2. Acesse **Configurações** no MiniHost.
+3. Na seção **Coolify**, informe a URL base do painel, por exemplo `https://coolify.exemplo.com`.
+4. Cole o token da API e clique em **Salvar configuração**.
+5. Clique em **Testar conexão**.
+
+O token:
+
+- É salvo criptografado na tabela `coolify_credentials`.
+- Nunca é retornado ao frontend após salvo.
+- Nunca deve ser colocado no código-fonte.
+- Só é descriptografado no backend quando a API interna do MiniHost chama o Coolify.
+
+### Sincronizar recursos Coolify
+
+1. Acesse **Coolify** no menu lateral.
+2. Clique em **Sincronizar recursos**.
+3. O MiniHost lista servidores, projetos e aplicações via backend e salva snapshots locais no PostgreSQL.
+
+As tabelas mostram dados em cache local como nome, FQDN, status, repositório, branch e última sincronização.
+
+### Vincular projeto MiniHost ao Coolify
+
+1. Sincronize recursos na página **Coolify**.
+2. Abra um projeto MiniHost em **Projetos**.
+3. Na seção **Coolify**, selecione o projeto e/ou aplicação sincronizada.
+4. Clique em **Salvar vínculo**.
+
+Esse vínculo é apenas organizacional nesta etapa. Ele não executa deploy nem modifica o Coolify.
 
 ## Etapa 11.5 implementada
 
@@ -451,10 +504,11 @@ Os testes E2E usam Playwright e cobrem login, logout, proteção de rotas, naveg
 
 ## Próximas etapas sugeridas
 
-1. Integrar com Coolify para deploy automatizado a partir dos projetos.
-2. Melhorar comparação antes/depois da sincronização DNS.
-3. Backup e restauração de bancos PostgreSQL por projeto.
+1. Planejar templates de deploy/projetos para usar recursos Coolify vinculados.
+2. Implementar criação assistida de aplicações Coolify com confirmação explícita.
+3. Melhorar comparação antes/depois da sincronização DNS.
+4. Backup e restauração de bancos PostgreSQL por projeto.
 
 ## Observação
 
-O MiniHost já provisiona e desprovisiona bancos PostgreSQL reais (com confirmação forte), sincroniza e edita DNS na Cloudflare, e mantém histórico/auditoria no PostgreSQL. Coolify e deploy automatizado ainda não estão integrados.
+O MiniHost já provisiona e desprovisiona bancos PostgreSQL reais (com confirmação forte), sincroniza e edita DNS na Cloudflare, lista recursos Coolify em modo leitura e mantém histórico/auditoria no PostgreSQL. Deploy automatizado via Coolify ainda não foi implementado.

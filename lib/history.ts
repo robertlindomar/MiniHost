@@ -17,6 +17,7 @@ export type AuditEntityFilter =
   | "project"
   | "project_database"
   | "cloudflare"
+  | "coolify"
   | "template"
   | "settings"
   | "system";
@@ -49,7 +50,12 @@ export function normalizeKey(key: string) {
 
 export function isSensitiveKey(key: string) {
   const normalized = normalizeKey(key);
-  return SENSITIVE_KEYS.has(normalized) || normalized.includes("password") || normalized.includes("secret");
+  return (
+    SENSITIVE_KEYS.has(normalized) ||
+    normalized.includes("password") ||
+    normalized.includes("secret") ||
+    normalized.includes("token")
+  );
 }
 
 export function maskSensitiveData(value: unknown): unknown {
@@ -141,6 +147,10 @@ export function getEntityFilterCategory(item: HistoryItem): AuditEntityFilter {
 
   if (action.includes("TEMPLATE") || action.includes("FROM_TEMPLATE")) {
     return "template";
+  }
+
+  if (action.includes("COOLIFY") || item.entityType === "coolify") {
+    return "coolify";
   }
 
   if (action.includes("CLOUDFLARE") || action.includes("SYNC")) {
@@ -245,6 +255,13 @@ export function getEntityDisplay(item: HistoryItem) {
   if (filterCategory === "cloudflare") {
     return {
       label: "Cloudflare",
+      identifier: item.entityName
+    };
+  }
+
+  if (filterCategory === "coolify") {
+    return {
+      label: "Coolify",
       identifier: item.entityName
     };
   }

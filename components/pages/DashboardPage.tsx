@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock3, Database, FolderKanban, Globe2, Link2Off, Server, ShieldCheck } from "lucide-react";
+import { Clock3, Database, FolderKanban, Globe2, Link2Off, Rocket, Server, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { QuickTemplatesCard } from "@/components/dashboard/QuickTemplatesCard";
@@ -20,6 +20,11 @@ interface DashboardResponse {
   projects: Project[];
   databases: ProjectDatabase[];
   history: HistoryItem[];
+  coolifySummary?: {
+    applications: number;
+    linkedProjects: number;
+    unlinkedProjects: number;
+  };
 }
 
 export function DashboardPage() {
@@ -28,6 +33,11 @@ export function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [databases, setDatabases] = useState<ProjectDatabase[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [coolifySummary, setCoolifySummary] = useState({
+    applications: 0,
+    linkedProjects: 0,
+    unlinkedProjects: 0
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +51,13 @@ export function DashboardPage() {
         setProjects(data.projects);
         setDatabases(data.databases);
         setHistory(data.history);
+        setCoolifySummary(
+          data.coolifySummary ?? {
+            applications: 0,
+            linkedProjects: 0,
+            unlinkedProjects: 0
+          }
+        );
         setError(null);
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar o dashboard.");
@@ -209,6 +226,33 @@ export function DashboardPage() {
           description="Projetos sem banco PostgreSQL ativo"
           icon={<FolderKanban className="h-5 w-5" />}
           tone="violet"
+          isLoading={isLoading}
+        />
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          title="Apps Coolify sincronizadas"
+          value={coolifySummary.applications}
+          description="Aplicações em cache local"
+          icon={<Rocket className="h-5 w-5" />}
+          tone="emerald"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Projetos vinculados ao Coolify"
+          value={coolifySummary.linkedProjects}
+          description="Projetos MiniHost com vínculo Coolify"
+          icon={<FolderKanban className="h-5 w-5" />}
+          tone="blue"
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Projetos sem vínculo Coolify"
+          value={coolifySummary.unlinkedProjects}
+          description="Projetos ativos sem associação Coolify"
+          icon={<Link2Off className="h-5 w-5" />}
+          tone="amber"
           isLoading={isLoading}
         />
       </section>
